@@ -51,7 +51,8 @@ static void check_glyph_and_rotation(struct terminal_ui *ui)
 	assert(!ink(ui) && !ui->shift && !ui->symbols);
 	assert(TERMINAL_UI_CELL_WIDTH == 16 && TERMINAL_UI_CELL_HEIGHT == 32);
 	assert(TERMINAL_UI_SAFE_MARGIN == 10);
-	assert(TERMINAL_UI_COLS == 41 && TERMINAL_UI_ROWS == 27);
+	assert(TERMINAL_UI_COLS == 41 && TERMINAL_UI_ROWS == 22);
+	assert(TERMINAL_UI_KEYBOARD_TOP == 728);
 	terminal_ui_put_cell(ui, 0, 0, 'A', false, false);
 	for (y = 0; y < 16; ++y)
 		for (x = 0; x < 8; ++x)
@@ -79,10 +80,10 @@ static void check_glyph_and_rotation(struct terminal_ui *ui)
 	assert(ui->frame[669 * 152 + 1] & 0x20); /* Portrait (14,10) -> native (10,669). */
 	assert(ui->frame[654 * 152 + 5] & 0x40); /* Portrait (29,41) -> native (41,654). */
 	terminal_ui_clear(ui);
-	terminal_ui_put_cell(ui, 26, 40, ' ', false, true);
+	terminal_ui_put_cell(ui, 21, 40, ' ', false, true);
 	assert(ink(ui) == 512);
-	assert(ui->frame[29 * 152 + 105] & 0x20); /* Portrait (654,842). */
-	assert(ui->frame[14 * 152 + 109] & 0x40); /* Portrait (669,873). */
+	assert(ui->frame[29 * 152 + 85] & 0x20); /* Portrait (654,682). */
+	assert(ui->frame[14 * 152 + 89] & 0x40); /* Portrait (669,713). */
 	check_safe_margin(ui);
 	terminal_ui_clear(ui);
 	for (c = 33; c <= 126; ++c) {
@@ -103,14 +104,23 @@ static void check_glyph_and_rotation(struct terminal_ui *ui)
 	terminal_ui_cursor(ui, 0, 0);
 	assert(!ink(ui));
 	terminal_ui_cursor(ui, -1, 0);
-	terminal_ui_cursor(ui, 27, 0);
+	terminal_ui_cursor(ui, 22, 0);
 	terminal_ui_cursor(ui, 0, 41);
 	terminal_ui_put_cell(ui, -1, 0, 'A', false, false);
 	terminal_ui_put_cell(ui, 0, -1, 'A', false, false);
-	terminal_ui_put_cell(ui, 27, 0, 'A', false, false);
+	terminal_ui_put_cell(ui, 22, 0, 'A', false, false);
 	terminal_ui_put_cell(ui, 0, 41, 'A', false, false);
 	terminal_ui_put_cell(ui, INT_MIN, INT_MAX, 'A', false, false);
 	assert(!ink(ui));
+	ui->shift = true;
+	terminal_ui_draw_keyboard(ui);
+	/* Keyboard A uses the same font at 24x48, centered in its 66x79 key. */
+	for (y = 0; y < 16; ++y)
+		for (x = 0; x < 8; ++x)
+			for (dy = 0; dy < 3; ++dy)
+				for (dx = 0; dx < 3; ++dx)
+					assert(portrait_pixel(ui, 66 + 3 * x + dx, 905 + 3 * y + dy) ==
+					       ((letter_a[y] >> (7U - x)) & 1U));
 }
 
 static void check_keyboard(struct terminal_ui *ui)
@@ -121,17 +131,22 @@ static void check_keyboard(struct terminal_ui *ui)
 	int key;
 
 	terminal_ui_init(ui);
-	assert(terminal_ui_key_at(ui, 39, 925) == '1');
-	assert(terminal_ui_key_at(ui, 67, 1078) == TERMINAL_UI_KEY_MODIFIER);
+	assert(terminal_ui_key_at(ui, 45, 771) == '1');
+	assert(terminal_ui_key_at(ui, 61, 1008) == TERMINAL_UI_KEY_MODIFIER);
 	assert(ui->shift);
-	assert(terminal_ui_key_at(ui, 39, 925) == '!');
-	assert(terminal_ui_key_at(ui, 94, 976) == 'Q');
-	assert(terminal_ui_key_at(ui, 67, 1078) == TERMINAL_UI_KEY_MODIFIER);
+	assert(terminal_ui_key_at(ui, 45, 771) == '!');
+	assert(terminal_ui_key_at(ui, 45, 850) == 'Q');
+	assert(terminal_ui_key_at(ui, 639, 1087) == '_');
+	assert(terminal_ui_key_at(ui, 243, 1087) == '?');
+	assert(terminal_ui_key_at(ui, 61, 1008) == TERMINAL_UI_KEY_MODIFIER);
 	assert(!ui->shift);
-	assert(terminal_ui_key_at(ui, 94, 976) == 'q');
-	assert(terminal_ui_key_at(ui, 67, 1129) == TERMINAL_UI_KEY_MODIFIER);
+	assert(terminal_ui_key_at(ui, 45, 850) == 'q');
+	assert(terminal_ui_key_at(ui, 61, 1087) == TERMINAL_UI_KEY_MODIFIER);
 	assert(ui->symbols);
-	assert(terminal_ui_key_at(ui, 94, 976) == '`');
+	assert(terminal_ui_key_at(ui, 45, 850) == '!');
+	assert(terminal_ui_key_at(ui, 61, 1008) == TERMINAL_UI_KEY_MODIFIER);
+	assert(ui->shift && ui->symbols);
+	assert(terminal_ui_key_at(ui, 144, 1008) == '~');
 	terminal_ui_clear(ui);
 	assert(ui->symbols);
 	for (state = 0; state < 4; ++state)
@@ -139,7 +154,7 @@ static void check_keyboard(struct terminal_ui *ui)
 			for (x = 0; x < TERMINAL_UI_WIDTH; ++x) {
 				ui->shift = state & 1U;
 				ui->symbols = state & 2U;
-				key = terminal_ui_key_at(ui, x, 925 + row * 51);
+				key = terminal_ui_key_at(ui, x, 771 + row * 79);
 				if (key > 0) {
 					assert(key >= 32 && key <= 126);
 					characters[key] = true;
@@ -152,20 +167,77 @@ static void check_keyboard(struct terminal_ui *ui)
 		assert(characters[c]);
 	for (c = 0; c < 11; ++c)
 		assert(actions[c]);
-	assert(!terminal_ui_key_at(ui, -1, 925));
-	assert(!terminal_ui_key_at(ui, 684, 925));
-	assert(!terminal_ui_key_at(ui, 39, 895));
+	assert(!terminal_ui_key_at(ui, -1, 771));
+	assert(!terminal_ui_key_at(ui, 684, 771));
+	assert(!terminal_ui_key_at(ui, 45, 727));
 	assert(!terminal_ui_key_at(ui, 39, 1216));
 	assert(!terminal_ui_key_at(ui, INT_MAX, INT_MIN));
-	assert(!terminal_ui_key_at(ui, 12, 902));
-	assert(!terminal_ui_key_at(ui, 39, 900));
-	assert(!terminal_ui_key_at(ui, 65, 925));
-	assert(terminal_ui_key_at(ui, 14, 902) != TERMINAL_UI_KEY_NONE);
-	assert(terminal_ui_key_at(ui, 64, 948) != TERMINAL_UI_KEY_NONE);
-	assert(!terminal_ui_key_at(ui, 39, 949));
-	assert(!terminal_ui_key_at(ui, 39, 1206));
-	assert(!terminal_ui_key_at(ui, 9, 925));
-	assert(!terminal_ui_key_at(ui, 674, 925));
+	assert(!terminal_ui_key_at(ui, 12, 735));
+	assert(!terminal_ui_key_at(ui, 45, 732));
+	assert(!terminal_ui_key_at(ui, 75, 771));
+	assert(!terminal_ui_key_at(ui, 45, 808));
+	assert(!terminal_ui_key_at(ui, 45, 1203));
+	assert(!terminal_ui_key_at(ui, 9, 771));
+	assert(!terminal_ui_key_at(ui, 674, 771));
+}
+
+static void check_key_box(struct terminal_ui *ui, int left, int top, int width,
+			  int value, bool symbols)
+{
+	const int points[][2] = {
+		{ left + width / 2, top + 39 },
+		{ left + 3, top + 3 }, { left + width - 4, top + 3 },
+		{ left + 3, top + 75 }, { left + width - 4, top + 75 },
+	};
+
+	for (unsigned int i = 0; i < sizeof(points) / sizeof(points[0]); ++i) {
+		ui->shift = false;
+		ui->symbols = symbols;
+		assert(terminal_ui_key_at(ui, points[i][0], points[i][1]) == value);
+	}
+	assert(!terminal_ui_key_at(ui, left + 2, top + 39));
+	assert(!terminal_ui_key_at(ui, left + width - 3, top + 39));
+	assert(!terminal_ui_key_at(ui, left + width / 2, top + 2));
+	assert(!terminal_ui_key_at(ui, left + width / 2, top + 76));
+}
+
+static void check_keyboard_layout(struct terminal_ui *ui)
+{
+	const char *letters[2][4] = {
+		{ "1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm" },
+		{ "1234567890", "!@#$%^&*()", "[]{}<>=+|", "`\\;:'\"," },
+	};
+	const struct { int left, top, width, value; } fixed[] = {
+		{ 12, 969, 99, TERMINAL_UI_KEY_MODIFIER },
+		{ 573, 969, 99, TERMINAL_UI_KEY_BACKSPACE },
+		{ 12, 1048, 99, TERMINAL_UI_KEY_MODIFIER },
+		{ 111, 1048, 99, TERMINAL_UI_KEY_TAB },
+		{ 210, 1048, 66, '/' }, { 276, 1048, 264, ' ' },
+		{ 540, 1048, 66, '.' }, { 606, 1048, 66, '-' },
+		{ 12, 1127, 66, TERMINAL_UI_KEY_ESCAPE },
+		{ 78, 1127, 132, TERMINAL_UI_KEY_CTRL_C },
+		{ 210, 1127, 66, TERMINAL_UI_KEY_LEFT },
+		{ 276, 1127, 66, TERMINAL_UI_KEY_DOWN },
+		{ 342, 1127, 66, TERMINAL_UI_KEY_UP },
+		{ 408, 1127, 66, TERMINAL_UI_KEY_RIGHT },
+		{ 474, 1127, 198, TERMINAL_UI_KEY_ENTER },
+	};
+
+	terminal_ui_init(ui);
+	for (unsigned int layer = 0; layer < 2; ++layer) {
+		for (unsigned int row = 0; row < 4; ++row)
+			for (unsigned int col = 0; letters[layer][row][col]; ++col) {
+				int left = (row == 2 ? 45 : row == 3 ? 111 : 12) + col * 66;
+
+				check_key_box(ui, left, 732 + row * 79, 66,
+					      letters[layer][row][col], layer);
+			}
+		for (unsigned int i = 0; i < sizeof(fixed) / sizeof(fixed[0]); ++i)
+			check_key_box(ui, fixed[i].left, fixed[i].top, fixed[i].width,
+				      fixed[i].value, layer);
+		assert(!terminal_ui_key_at(ui, 47, 929));
+		assert(!terminal_ui_key_at(ui, 636, 929));
+	}
 }
 
 static void check_keyboard_render(struct terminal_ui *ui)
@@ -174,7 +246,7 @@ static void check_keyboard_render(struct terminal_ui *ui)
 	unsigned int x, y;
 
 	terminal_ui_init(ui);
-	terminal_ui_put_cell(ui, 26, 40, 'a', false, false);
+	terminal_ui_put_cell(ui, 21, 40, 'a', false, false);
 	memcpy(snapshot, ui->frame, sizeof(snapshot));
 	terminal_ui_draw_keyboard(ui);
 	assert(ink(ui) > 1000);
@@ -193,12 +265,34 @@ static void check_keyboard_render(struct terminal_ui *ui)
 	terminal_ui_draw_keyboard(ui);
 	assert(memcmp(snapshot, ui->frame, sizeof(snapshot)));
 	check_safe_margin(ui);
+	for (unsigned int state = 0; state < 4; ++state) {
+		ui->shift = state & 1U;
+		ui->symbols = state & 2U;
+		terminal_ui_draw_keyboard(ui);
+		/* Borders and labels must stay inside their touch targets in every layer. */
+		for (y = TERMINAL_UI_KEYBOARD_TOP; y < TERMINAL_UI_HEIGHT; ++y)
+			for (x = 0; x < TERMINAL_UI_WIDTH; ++x) {
+				ui->shift = state & 1U;
+				ui->symbols = state & 2U;
+				if (!terminal_ui_key_at(ui, x, y))
+					assert(!portrait_pixel(ui, x, y));
+			}
+	}
+	/* The four arrows have a shaft and the appropriate directional head. */
+	assert(portrait_pixel(ui, 243, 1166) && portrait_pixel(ui, 230, 1166));
+	assert(portrait_pixel(ui, 235, 1161) && !portrait_pixel(ui, 251, 1161));
+	assert(portrait_pixel(ui, 309, 1166) && portrait_pixel(ui, 309, 1179));
+	assert(portrait_pixel(ui, 304, 1174) && !portrait_pixel(ui, 304, 1158));
+	assert(portrait_pixel(ui, 375, 1166) && portrait_pixel(ui, 375, 1153));
+	assert(portrait_pixel(ui, 370, 1158) && !portrait_pixel(ui, 370, 1174));
+	assert(portrait_pixel(ui, 441, 1166) && portrait_pixel(ui, 454, 1166));
+	assert(portrait_pixel(ui, 449, 1161) && !portrait_pixel(ui, 433, 1161));
 }
 
 static void check_no_press_feedback(struct terminal_ui *ui)
 {
 	unsigned char normal[METALIO_EPD_FRAME_BYTES];
-	const int keys[][2] = { {39, 925}, {94, 976}, {620, 1180}, {34, 1180} };
+	const int keys[][2] = { {45, 771}, {45, 850}, {573, 1166}, {144, 1166} };
 
 	for (unsigned int state = 0; state < 4; ++state) {
 		terminal_ui_init(ui);
@@ -212,7 +306,7 @@ static void check_no_press_feedback(struct terminal_ui *ui)
 			terminal_ui_draw_keyboard(ui);
 			assert(!memcmp(normal, ui->frame, sizeof(normal)));
 		}
-		assert(!terminal_ui_key_at(ui, -1, 925));
+		assert(!terminal_ui_key_at(ui, -1, 771));
 		terminal_ui_clear(ui);
 		terminal_ui_draw_keyboard(ui);
 		assert(!memcmp(normal, ui->frame, sizeof(normal)));
@@ -230,16 +324,16 @@ static void check_safe_layout(struct terminal_ui *ui)
 		for (col = 0; col < TERMINAL_UI_COLS; ++col)
 			terminal_ui_put_cell(ui, row, col, ' ', false, true);
 	/* Every cell fits completely, including the first and last rows/columns. */
-	assert(ink(ui) == 41U * 27U * 16U * 32U);
-	assert(portrait_pixel(ui, 14, 10) && portrait_pixel(ui, 669, 873));
-	assert(!portrait_pixel(ui, 13, 10) && !portrait_pixel(ui, 670, 873));
-	assert(!portrait_pixel(ui, 14, 9) && !portrait_pixel(ui, 669, 874));
+	assert(ink(ui) == 41U * 22U * 16U * 32U);
+	assert(portrait_pixel(ui, 14, 10) && portrait_pixel(ui, 669, 713));
+	assert(!portrait_pixel(ui, 13, 10) && !portrait_pixel(ui, 670, 713));
+	assert(!portrait_pixel(ui, 14, 9) && !portrait_pixel(ui, 669, 714));
 	check_safe_margin(ui);
 	for (row = 0; row < TERMINAL_UI_ROWS; ++row)
 		for (col = 0; col < TERMINAL_UI_COLS; ++col)
 			terminal_ui_put_cell(ui, row, col, 'A', true, true);
 	terminal_ui_cursor(ui, 0, 0);
-	terminal_ui_cursor(ui, 26, 40);
+	terminal_ui_cursor(ui, 21, 40);
 	for (state = 0; state < 4; ++state) {
 		ui->shift = state & 1U;
 		ui->symbols = state & 2U;
@@ -306,6 +400,7 @@ int main(int argc, char **argv)
 	memset(storage, 0xa5, sizeof(*storage));
 	check_glyph_and_rotation(&storage->ui);
 	check_keyboard(&storage->ui);
+	check_keyboard_layout(&storage->ui);
 	check_keyboard_render(&storage->ui);
 	check_no_press_feedback(&storage->ui);
 	check_safe_layout(&storage->ui);
@@ -314,6 +409,6 @@ int main(int argc, char **argv)
 	if (argc == 2)
 		preview(&storage->ui, argv[1]);
 	free(storage);
-	puts("terminal UI: ASCII glyphs, rotation, attributes, cursor, keyboard layers, no press redraws and 10px safe margins passed");
+	puts("terminal UI: ASCII glyphs, rotation, attributes, cursor, large key geometry, keyboard layers, arrows, no press redraws and 10px safe margins passed");
 	return 0;
 }

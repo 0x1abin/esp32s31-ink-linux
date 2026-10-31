@@ -6,13 +6,36 @@
 
 `metalio-terminal` starts once from BusyBox `inittab`. It opens a UNIX98 PTY,
 starts an interactive BusyBox `ash`, and parses output with libvterm 0.3.3. The
-portrait terminal has 41 columns × 27 rows of 16 × 32 pixel characters with at
-least a 10 pixel margin. Its six-row keyboard supports English letters,
+portrait terminal has 41 columns × 22 rows of 16 × 32 pixel characters with at
+least a 10 pixel margin. Its six-row keyboard occupies the bottom 40% of the
+screen, starting at portrait Y=728, and supports English letters,
 numbers, symbols, Shift, Backspace, Enter, Tab, Esc, Ctrl-C, and arrows. The
 cursor does not blink. The leftmost capacitive confirm key (`KEY_REFRESH`)
 requests one full GC refresh per press, queued if busy. The two page keys
 (`KEY_ENTER`) and the on-screen Enter key send Return; holding a physical key
 does not repeat.
+
+The keyboard has a permanent number row, QWERTY letters with a centered home
+row, and 60 × 73 pixel standard touch targets separated by 6 pixel inactive
+gaps. Shift and Backspace are 1.5 keys wide, Space is four keys wide, and Enter
+is three keys wide. Single-character labels use 24 × 48 pixel glyphs;
+function labels use 16 × 32 pixel glyphs and arrows are drawn as lines.
+
+```text
+[1] [2] [3] [4] [5] [6] [7] [8] [9] [0]
+[q] [w] [e] [r] [t] [y] [u] [i] [o] [p]
+  [a] [s] [d] [f] [g] [h] [j] [k] [l]
+[Shift] [z] [x] [c] [v] [b] [n] [m] [Back]
+[Sym] [Tab] [/] [      Space      ] [.] [-]
+[Esc] [Ctrl-C] [←] [↓] [↑] [→] [  Enter  ]
+```
+
+Sym replaces the letter rows with `! @ # $ % ^ & * ( )`,
+`[ ] { } < > = + |`, and `` ` \ ; : ' " , `` respectively. Numbers,
+function keys, and `/ . -` retain their positions. Shift toggles until tapped
+again, including across symbol-layer changes; together the layers provide all
+printable ASCII characters. Touching a gap sends nothing, and holding or sliding
+a finger does not repeat input.
 
 PTY and input events continue to be processed during a display refresh. Terminal
 output is coalesced after 120 ms of idle time or about one second of continuous

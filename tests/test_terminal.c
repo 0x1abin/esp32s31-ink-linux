@@ -290,9 +290,15 @@ static void test_touch(void)
 	CHECK(term->queued == 2);
 	contact(term, 30, 30, false);
 	term->terminal_dirty = term->keyboard_dirty = false;
-	contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 186, true);
+	/* A press in the 6px gap cannot type or turn into a press by sliding. */
+	contact(term, 75, keyboard_y, true);
+	CHECK(term->queued == 2 && !term->keyboard_dirty);
+	contact(term, 90, keyboard_y, true);
+	CHECK(term->queued == 2 && !term->keyboard_dirty);
+	contact(term, 90, keyboard_y, false);
+	contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 280, true);
 	CHECK(term->ui.shift && term->keyboard_dirty && !term->terminal_dirty && term->queued == 2);
-	contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 186, false);
+	contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 280, false);
 	term->ui.shift = false;
 	event(term, EV_SYN, SYN_DROPPED, 0);
 	contact(term, 34, keyboard_y, true);
@@ -373,9 +379,9 @@ static void test_keys_without_feedback(void)
 	CHECK(!memcmp(baseline, term->ui.frame, sizeof(term->ui.frame)));
 
 	/* Ctrl-C also has no visual press/release cycle. Holding never repeats. */
-	contact(term, 34, keyboard_y + 5 * 51, true);
-	contact(term, 90, keyboard_y + 5 * 51, true);
-	contact(term, 90, keyboard_y + 5 * 51, false);
+	contact(term, 144, keyboard_y + 5 * 79, true);
+	contact(term, 240, keyboard_y + 5 * 79, true);
+	contact(term, 240, keyboard_y + 5 * 79, false);
 	CHECK(term->queued == 3 && term->outgoing[2] == '\003');
 	CHECK(!refresh_due(term, milliseconds() + 100000) && epd_requests == 1);
 
@@ -402,7 +408,7 @@ static void test_keys_without_feedback(void)
 
 static void test_layer_updates(void)
 {
-	const int shift_y = TERMINAL_UI_KEYBOARD_TOP + 186;
+	const int shift_y = TERMINAL_UI_KEYBOARD_TOP + 280;
 	struct terminal *term = displayed_fixture(1U << METALIO_EPD_FEEDBACK);
 	unsigned char *baseline = malloc(sizeof(term->ui.frame));
 	CHECK(baseline);
@@ -418,7 +424,7 @@ static void test_layer_updates(void)
 	CHECK(term->ui.shift && !term->keyboard_dirty);
 	CHECK(!refresh_due(term, milliseconds() + 100000));
 
-	contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 240, true);
+	contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 359, true);
 	CHECK(term->ui.symbols && term->ui.shift && !term->queued);
 	CHECK(refresh(term) == 0 && epd_mode == METALIO_EPD_FEEDBACK);
 	check_terminal_pixels(baseline, epd_frame);
@@ -426,7 +432,7 @@ static void test_layer_updates(void)
 	feed(term, "\033[Houtput during layer update");
 	changed(term, false);
 	CHECK(!memcmp(epd_frame, term->ui.frame, sizeof(term->ui.frame)));
-	contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 240, false);
+	contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 359, false);
 	complete_refresh(term);
 	CHECK(refresh_due(term, term->last_change + 120));
 	CHECK(refresh(term) == 0 && epd_mode == METALIO_EPD_DU);
@@ -451,7 +457,7 @@ static void test_layer_updates(void)
 
 static void test_follow_capabilities_and_gc(void)
 {
-	const int keyboard_y = TERMINAL_UI_KEYBOARD_TOP + 186;
+	const int keyboard_y = TERMINAL_UI_KEYBOARD_TOP + 280;
 	const unsigned int capabilities[] = { 0, (1U << METALIO_EPD_DU) | (1U << METALIO_EPD_GC) };
 	for (unsigned int i = 0; i < sizeof(capabilities) / sizeof(capabilities[0]); ++i) {
 		struct terminal *term = displayed_fixture(capabilities[i]);
@@ -499,7 +505,7 @@ static void test_failed_refresh_keeps_pending_state(void)
 		term->updates = counts[count];
 		feed(term, "pending");
 		changed(term, false);
-		contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 186, true);
+		contact(term, 34, TERMINAL_UI_KEYBOARD_TOP + 280, true);
 		epd_failure = failure;
 		errno = 0;
 		CHECK(refresh(term) == -1 && errno == EIO);
@@ -628,14 +634,14 @@ static void test_physical_full_refresh(void)
 
 	/* On-screen Enter sends Return without press/release redraws. */
 	physical_refresh(term, 1);
-	contact(term, 620, TERMINAL_UI_KEYBOARD_TOP + 30 + 5 * 51, true);
+	contact(term, 620, TERMINAL_UI_KEYBOARD_TOP + 30 + 5 * 79, true);
 	CHECK(term->queued == 1 && term->outgoing[0] == '\r');
 	CHECK(term->touching && term->refresh_down);
 	CHECK(!term->keyboard_dirty && term->pending_full_refreshes == 1);
 	physical_refresh(term, 1);
-	contact(term, 620, TERMINAL_UI_KEYBOARD_TOP + 30 + 5 * 51, true);
+	contact(term, 620, TERMINAL_UI_KEYBOARD_TOP + 30 + 5 * 79, true);
 	CHECK(term->queued == 1 && term->pending_full_refreshes == 1);
-	contact(term, 620, TERMINAL_UI_KEYBOARD_TOP + 30 + 5 * 51, false);
+	contact(term, 620, TERMINAL_UI_KEYBOARD_TOP + 30 + 5 * 79, false);
 	CHECK(refresh(term) == 0 && epd_mode == METALIO_EPD_GC);
 	complete_refresh(term);
 	CHECK(!term->keyboard_dirty && !refresh_due(term, milliseconds() + 100000));

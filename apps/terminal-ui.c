@@ -3,10 +3,11 @@
 #include "terminal-font.h"
 #include <string.h>
 
-#define KEY_UNIT ((TERMINAL_UI_WIDTH - 2 * TERMINAL_UI_SAFE_MARGIN) / 12)
-#define KEY_X ((TERMINAL_UI_WIDTH - 12 * KEY_UNIT) / 2)
+/* Half-key units allow 1.5-key modifiers and a centered home row. */
+#define KEY_UNIT ((TERMINAL_UI_WIDTH - 2 * TERMINAL_UI_SAFE_MARGIN) / 20)
 #define KEY_Y (TERMINAL_UI_KEYBOARD_TOP + 4)
 #define KEY_HEIGHT ((TERMINAL_UI_HEIGHT - TERMINAL_UI_SAFE_MARGIN - KEY_Y) / 6)
+#define KEY_INSET 3
 #define UI_SHIFT (-100)
 #define UI_SYMBOLS (-101)
 #define CELL_X ((TERMINAL_UI_WIDTH - TERMINAL_UI_COLS * TERMINAL_UI_CELL_WIDTH) / 2)
@@ -18,35 +19,43 @@ struct key {
 	const char *label;
 };
 
-#define CHAR(c, s) { c, s, 1, NULL }
+#define CHAR(c, s) { c, s, 2, NULL }
 #define ACTION(key, width, text) { key, key, width, text }
-static const struct key keyboard[6][12] = {
+static const struct key keyboard[6][10] = {
 	{ CHAR('1','1'), CHAR('2','2'), CHAR('3','3'), CHAR('4','4'),
 	  CHAR('5','5'), CHAR('6','6'), CHAR('7','7'), CHAR('8','8'),
-	  CHAR('9','9'), CHAR('0','0'), CHAR('-','-'), CHAR('=','=') },
-	{ ACTION(TERMINAL_UI_KEY_TAB,1,"Tab"),
-	  CHAR('q','`'), CHAR('w','~'), CHAR('e','['), CHAR('r',']'),
-	  CHAR('t','{'), CHAR('y','}'), CHAR('u','<'), CHAR('i','>'),
-	  CHAR('o','\\'), CHAR('p','|'), CHAR('\\','/') },
-	{ ACTION(TERMINAL_UI_KEY_ESCAPE,1,"Esc"),
-	  CHAR('a','!'), CHAR('s','@'), CHAR('d','#'), CHAR('f','$'),
-	  CHAR('g','%'), CHAR('h','^'), CHAR('j','&'), CHAR('k','*'),
-	  CHAR('l','('), CHAR(';',')'), CHAR('\'','-') },
-	{ ACTION(UI_SHIFT,2,"Shift"),
-	  CHAR('z','='), CHAR('x','+'), CHAR('c','_'), CHAR('v',':'),
-	  CHAR('b',';'), CHAR('n','"'), CHAR('m','\''), CHAR(',',','),
-	  CHAR('.','.'), CHAR('/','?') },
-	{ ACTION(UI_SYMBOLS,2,"Sym"), CHAR('`','`'), CHAR('[','['), CHAR(']',']'),
-	  ACTION(' ',5,"Space"), ACTION(TERMINAL_UI_KEY_BACKSPACE,2,"Back") },
-	{ ACTION(TERMINAL_UI_KEY_CTRL_C,2,"Ctrl-C"),
+	  CHAR('9','9'), CHAR('0','0') },
+	{ CHAR('q','!'), CHAR('w','@'), CHAR('e','#'), CHAR('r','$'),
+	  CHAR('t','%'), CHAR('y','^'), CHAR('u','&'), CHAR('i','*'),
+	  CHAR('o','('), CHAR('p',')') },
+	{ CHAR('a','['), CHAR('s',']'), CHAR('d','{'), CHAR('f','}'),
+	  CHAR('g','<'), CHAR('h','>'), CHAR('j','='), CHAR('k','+'), CHAR('l','|') },
+	{ ACTION(UI_SHIFT,3,"Shift"),
+	  CHAR('z','`'), CHAR('x','\\'), CHAR('c',';'), CHAR('v',':'),
+	  CHAR('b','\''), CHAR('n','"'), CHAR('m',','),
+	  ACTION(TERMINAL_UI_KEY_BACKSPACE,3,"Back") },
+	{ ACTION(UI_SYMBOLS,3,"Sym"), ACTION(TERMINAL_UI_KEY_TAB,3,"Tab"),
+	  CHAR('/','/'), ACTION(' ',8,"Space"), CHAR('.','.'), CHAR('-','-') },
+	{ ACTION(TERMINAL_UI_KEY_ESCAPE,2,"Esc"),
+	  ACTION(TERMINAL_UI_KEY_CTRL_C,4,"Ctrl-C"),
 	  ACTION(TERMINAL_UI_KEY_LEFT,2,"Left"),
 	  ACTION(TERMINAL_UI_KEY_DOWN,2,"Down"),
 	  ACTION(TERMINAL_UI_KEY_UP,2,"Up"),
 	  ACTION(TERMINAL_UI_KEY_RIGHT,2,"Right"),
-	  ACTION(TERMINAL_UI_KEY_ENTER,2,"Enter") },
+	  ACTION(TERMINAL_UI_KEY_ENTER,6,"Enter") },
 };
 #undef CHAR
 #undef ACTION
+
+static int row_left(unsigned int row)
+{
+	unsigned int index;
+	int units = 0;
+
+	for (index = 0; index < 10; ++index)
+		units += keyboard[row][index].units;
+	return (TERMINAL_UI_WIDTH - units * KEY_UNIT) / 2;
+}
 
 static void pixel(struct terminal_ui *ui, int x, int y, bool black)
 {
@@ -95,6 +104,29 @@ static void glyph(struct terminal_ui *ui, int x, int y, uint32_t codepoint,
 				for (dx = 0; dx < scale; ++dx)
 					pixel(ui, x + col * scale + dx, y + row * scale + dy,
 					      !!(bits & (128U >> col)) != inverse);
+	}
+}
+
+static void arrow(struct terminal_ui *ui, int x, int y, int value)
+{
+	bool horizontal = value == TERMINAL_UI_KEY_LEFT || value == TERMINAL_UI_KEY_RIGHT;
+	int direction = value == TERMINAL_UI_KEY_LEFT || value == TERMINAL_UI_KEY_UP ? -1 : 1;
+	int i;
+
+	if (horizontal)
+		rectangle(ui, x - 12, y - 1, 25, 3, true);
+	else
+		rectangle(ui, x - 1, y - 12, 3, 25, true);
+	for (i = 0; i <= 10; ++i) {
+		int along = direction * (12 - i);
+
+		if (horizontal) {
+			rectangle(ui, x + along - 1, y - i - 1, 3, 3, true);
+			rectangle(ui, x + along - 1, y + i - 1, 3, 3, true);
+		} else {
+			rectangle(ui, x - i - 1, y + along - 1, 3, 3, true);
+			rectangle(ui, x + i - 1, y + along - 1, 3, 3, true);
+		}
 	}
 }
 
@@ -159,9 +191,9 @@ void terminal_ui_draw_keyboard(struct terminal_ui *ui)
 	rectangle(ui, 0, TERMINAL_UI_KEYBOARD_TOP, TERMINAL_UI_WIDTH,
 		  TERMINAL_UI_HEIGHT - TERMINAL_UI_KEYBOARD_TOP, false);
 	for (row = 0; row < 6; ++row) {
-		int left = KEY_X;
+		int left = row_left(row);
 
-		for (index = 0; index < 12 && keyboard[row][index].units; ++index) {
+		for (index = 0; index < 10 && keyboard[row][index].units; ++index) {
 			const struct key *key = &keyboard[row][index];
 			int width = key->units * KEY_UNIT;
 			int top = KEY_Y + row * KEY_HEIGHT;
@@ -169,20 +201,29 @@ void terminal_ui_draw_keyboard(struct terminal_ui *ui)
 				      (key->value == UI_SYMBOLS && ui->symbols);
 			char character[2] = { 0, 0 };
 			const char *label = key->label;
-			int x;
+			int x, scale = label ? 2 : 3;
 
-			rectangle(ui, left + 2, top + 2, width - 4, KEY_HEIGHT - 4, true);
+			rectangle(ui, left + KEY_INSET, top + KEY_INSET,
+				  width - 2 * KEY_INSET, KEY_HEIGHT - 2 * KEY_INSET, true);
 			if (!active)
-				rectangle(ui, left + 3, top + 3, width - 6, KEY_HEIGHT - 6, false);
+				rectangle(ui, left + KEY_INSET + 1, top + KEY_INSET + 1,
+					  width - 2 * KEY_INSET - 2, KEY_HEIGHT - 2 * KEY_INSET - 2, false);
+			if (key->value == TERMINAL_UI_KEY_LEFT || key->value == TERMINAL_UI_KEY_DOWN ||
+			    key->value == TERMINAL_UI_KEY_UP || key->value == TERMINAL_UI_KEY_RIGHT) {
+				arrow(ui, left + width / 2, top + KEY_HEIGHT / 2, key->value);
+				left += width;
+				continue;
+			}
 			if (key->value == UI_SYMBOLS)
 				label = ui->symbols ? "ABC" : "Sym";
 			if (!label) {
 				character[0] = key_value(ui, key);
 				label = character;
 			}
-			x = left + (width - (int)strlen(label) * 16) / 2;
-			for (; *label; ++label, x += 16)
-				glyph(ui, x, top + 10, (unsigned char)*label, false, active, 2);
+			x = left + (width - (int)strlen(label) * 8 * scale) / 2;
+			for (; *label; ++label, x += 8 * scale)
+				glyph(ui, x, top + (KEY_HEIGHT - 16 * scale) / 2,
+				      (unsigned char)*label, false, active, scale);
 			left += width;
 		}
 	}
@@ -192,18 +233,19 @@ int terminal_ui_key_at(struct terminal_ui *ui, int x, int y)
 {
 	const struct key *key;
 	unsigned int row, index;
-	int left = KEY_X, top;
+	int left, top;
 
-	if (x < KEY_X || x >= KEY_X + 12 * KEY_UNIT || y < KEY_Y ||
-	    y >= KEY_Y + 6 * KEY_HEIGHT)
+	if (x < TERMINAL_UI_SAFE_MARGIN || x >= TERMINAL_UI_WIDTH - TERMINAL_UI_SAFE_MARGIN ||
+	    y < KEY_Y || y >= KEY_Y + 6 * KEY_HEIGHT)
 		return TERMINAL_UI_KEY_NONE;
 	row = (y - KEY_Y) / KEY_HEIGHT;
 	top = KEY_Y + row * KEY_HEIGHT;
-	if (y < top + 2 || y >= top + KEY_HEIGHT - 2)
+	if (y < top + KEY_INSET || y >= top + KEY_HEIGHT - KEY_INSET)
 		return TERMINAL_UI_KEY_NONE;
-	for (index = 0; index < 12 && keyboard[row][index].units; ++index) {
+	left = row_left(row);
+	for (index = 0; index < 10 && keyboard[row][index].units; ++index) {
 		key = &keyboard[row][index];
-		if (x >= left + 2 && x < left + key->units * KEY_UNIT - 2) {
+		if (x >= left + KEY_INSET && x < left + key->units * KEY_UNIT - KEY_INSET) {
 			if (key->value == UI_SHIFT) {
 				ui->shift = !ui->shift;
 				return TERMINAL_UI_KEY_MODIFIER;
