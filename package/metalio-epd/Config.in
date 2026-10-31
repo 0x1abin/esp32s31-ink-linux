@@ -1,0 +1,7 @@
+config BR2_PACKAGE_METALIO_EPD
+	bool "Metalio native e-paper driver, demo and terminal"
+	depends on BR2_LINUX_KERNEL
+	select BR2_PACKAGE_LIBVTERM
+	help
+	  Installs the board kernel driver, a test-pattern demo, and a local
+	  shell terminal with a touch keyboard.

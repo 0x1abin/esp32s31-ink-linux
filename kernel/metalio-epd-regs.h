@@ -1,0 +1,107 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#ifndef METALIO_EPD_REGS_H
+#define METALIO_EPD_REGS_H
+
+/* ESP-IDF ESP32-S31 register/LL definitions, offsets from each DT resource. */
+#define EPD_LCD_CLOCK 0x00
+#define EPD_LCD_USER 0x14
+#define EPD_LCD_MISC 0x18
+#define EPD_LCD_VERTICAL 0x1c
+#define EPD_LCD_HORIZONTAL 0x20
+#define EPD_LCD_BLANK 0x24
+#define EPD_LCD_RGB 0x28
+#define EPD_LCD_BUFFER 0x3c
+#define EPD_LCD_INT_ENA 0x64
+#define EPD_LCD_INT_RAW 0x68
+#define EPD_LCD_INT_ST 0x6c
+#define EPD_LCD_INT_CLR 0x70
+#define EPD_LCD_UPDATE BIT(21)
+#define EPD_LCD_START BIT(27)
+#define EPD_LCD_RESET BIT(28)
+#define EPD_LCD_DOUT BIT(24)
+#define EPD_LCD_ALWAYS BIT(13)
+#define EPD_LCD_RGB_MODE BIT(3)
+#define EPD_LCD_BLANK_EN BIT(26)
+#define EPD_LCD_FIFO_RESET BIT(27)
+#define EPD_LCD_VSYNC BIT(0)
+#define EPD_LCD_UNDERRUN BIT(4)
+#define EPD_LCD_EVENTS (EPD_LCD_VSYNC | EPD_LCD_UNDERRUN)
+
+#define EPD_DMA_RAW 0x138
+#define EPD_DMA_ST 0x13c
+#define EPD_DMA_ENA 0x140
+#define EPD_DMA_CLR 0x144
+#define EPD_DMA_CONF0 0x148
+#define EPD_DMA_CONF1 0x14c
+#define EPD_DMA_LINK1 0x158
+#define EPD_DMA_LINK2 0x15c
+#define EPD_DMA_PRI 0x178
+#define EPD_DMA_PERIPH 0x17c
+#define EPD_DMA_SRAM_START 0x27c
+#define EPD_DMA_SRAM_END 0x280
+#define EPD_DMA_EXT_START 0x284
+#define EPD_DMA_EXT_END 0x288
+#define EPD_DMA_RESET_AVAIL 0x298
+#define EPD_DMA_MISC 0x2a8
+#define EPD_DMA_RESET BIT(0)
+#define EPD_DMA_ABORT BIT(8)
+#define EPD_DMA_EOF BIT(3)
+#define EPD_DMA_ERRORS (BIT(2) | BIT(4) | BIT(5))
+#define EPD_DMA_EVENTS (EPD_DMA_EOF | EPD_DMA_ERRORS)
+#define EPD_DMA_STOP BIT(0)
+#define EPD_DMA_START BIT(1)
+#define EPD_DMA_PARK BIT(3)
+#define EPD_DESC_OWNER BIT(31)
+#define EPD_DESC_EOF BIT(30)
+#define EPD_DESC_CHUNK 4032U
+
+#define EPD_RMT_CONF 0x20
+#define EPD_RMT_RAW 0x70
+#define EPD_RMT_CLR 0x7c
+#define EPD_RMT_LIMIT 0xa0
+#define EPD_RMT_SYS 0xc0
+#define EPD_RMT_START BIT(0)
+#define EPD_RMT_RD_RESET BIT(1)
+#define EPD_RMT_APB_RESET BIT(2)
+#define EPD_RMT_LOOP BIT(3)
+#define EPD_RMT_IDLE_EN BIT(6)
+#define EPD_RMT_STOP BIT(7)
+#define EPD_RMT_UPDATE BIT(24)
+#define EPD_RMT_LOOP_EN BIT(19)
+#define EPD_RMT_LOOP_RESET BIT(20)
+#define EPD_RMT_AUTOSTOP BIT(21)
+#define EPD_RMT_DONE BIT(0)
+#define EPD_RMT_ERROR BIT(4)
+#define EPD_RMT_LOOP_DONE BIT(12)
+
+#define EPD_CLK_DMA 0x78
+#define EPD_CLK_RMT 0xbc
+#define EPD_CLK_LCD_BUS 0x14c
+#define EPD_CLK_LCD 0x150
+#define EPD_CLK_LCDCAM 0x154
+#define EPD_MEM_RMT 0x204
+#define EPD_MEM_LCD 0x264
+#define EPD_IOMUX_FUNCTION GENMASK(14, 12)
+#define EPD_IOMUX_DRIVE GENMASK(11, 10)
+#define EPD_IOMUX_PULLS (BIT(7) | BIT(8))
+#define EPD_MATRIX_OUT(pin) (0xaf4 + (pin) * 4)
+#define EPD_MATRIX_MASK GENMASK(11, 0)
+#define EPD_MATRIX_OE BIT(10)
+#define EPD_SIGNAL_GPIO 256U
+#define EPD_SIGNAL_PCLK 149U
+#define EPD_SIGNAL_DE 151U
+#define EPD_SIGNAL_HSYNC 152U
+#define EPD_SIGNAL_RMT0 246U
+
+#define EPD_PCLK_MHZ 20U
+/* Preserve the original scan timing independently of the selected waveform. */
+#define EPD_LINE_US 17U
+#define EPD_LINE_CLOCKS 340U
+#define EPD_CKV_HIGH_TICKS 159U
+#define EPD_CKV_LOW_TICKS 11U
+#define EPD_CKV_LAUNCH_US 15U
+#define EPD_RMT_CONFIGURATION (EPD_RMT_LOOP | EPD_RMT_IDLE_EN | (8U << 8) | (2U << 16))
+#define EPD_LCD_USER_CONFIGURATION (EPD_LCD_DOUT | EPD_LCD_ALWAYS)
+#define EPD_LCD_MISC_CONFIGURATION (EPD_LCD_RGB_MODE | EPD_LCD_BLANK_EN)
+
+#endif

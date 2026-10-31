@@ -1,0 +1,4 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Force also cleans up a DHCP client left by a failed supplicant start.
+ifdown -f wlan0 >/dev/null 2>&1 || :

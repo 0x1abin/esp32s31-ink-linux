@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: BSD-2-Clause
+platform-cppflags-y = -I$(ESP32S31_INK_LINUX_SHARED_DIR)
+platform-cflags-y = $(platform-cppflags-y)
+platform-asflags-y = $(platform-cppflags-y)
+PLATFORM_RISCV_XLEN = 32
+PLATFORM_RISCV_ABI = ilp32
+PLATFORM_RISCV_ISA = rv32imac_zicsr_zifencei
+PLATFORM_RISCV_CODE_MODEL = medany
+PLATFORM_HART_COUNT = 1
+FW_TEXT_START = 0x50f00000
+FW_JUMP = y
+FW_JUMP_ADDR = 0x40400000
+FW_DYNAMIC = n
+FW_PAYLOAD = n
+platform-objs-y += platform.o

@@ -1,0 +1,23 @@
+From: Metalio BSP maintainers
+Subject: [PATCH] mtd: physmap: preserve the size of unbanked resources
+
+The Wi-Fi layout maps a 6 MiB read-only cramfs resource. Rounding its map
+size down to a power of two advertises only 4 MiB to MTD, so mtd_point()
+rejects a complete image larger than 4 MiB. Only GPIO-banked mappings need
+the window-order calculation; use the exact resource size otherwise.
+
+--- a/drivers/mtd/maps/physmap-core.c
++++ b/drivers/mtd/maps/physmap-core.c
+@@ -519,9 +519,9 @@
+ 			info->maps[i].phys = res->start;
+ 
+ 		info->win_order = fls64(resource_size(res)) - 1;
+-		info->maps[i].size = BIT(info->win_order +
+-					 (info->gpios ?
+-					  info->gpios->ndescs : 0));
++		info->maps[i].size = info->gpios ?
++			BIT(info->win_order + info->gpios->ndescs) :
++			resource_size(res);
+ 
+ 		info->maps[i].map_priv_1 = (unsigned long)dev;
+ 

@@ -1,0 +1,131 @@
+From: Metalio BSP maintainers
+Subject: [PATCH] riscv: integrate hosted S31 supervisor CLIC IRQ handling
+
+The CPU1 Linux hosted profile needs all three CLIC adaptations together:
+- Use byte MMIO enables because S31 has no supervisor SIE/SIP CSRs.
+- Lower SIL with an early sret before do_irq() can schedule another task,
+  retaining the original pt_regs/raw scause for the normal final return.
+- Keep a newly chained parent slot masked until its child mapping and
+  handler are ready, preventing a pending boot doorbell from arriving early.
+
+The trap-entry sequence is adapted from Marco Mueller (Marco Müller),
+annoyedmilk/esp32-s31-linux at 2f3eb1268edd1bb2ca002eb4be339a635003b1e4,
+linux/patches/0001-riscv-esp32s31-soc-support.patch (GPL-2.0-only).
+The MMIO-enable integration and chained-slot startup guard are Metalio BSP
+changes against pinned Linux b3bd414d03b8eebb2e44edf08c86058d55e403b3.
+These changes retain the source files' Linux licenses.
+
+--- a/arch/riscv/kernel/entry.S
++++ b/arch/riscv/kernel/entry.S
+@@ -214,6 +214,22 @@
+ 	bge s4, zero, 1f
+ 
+ 	/* Handle interrupts */
++#ifdef CONFIG_ESP32S31_HOSTED
++	/* CLIC SIL must be zero before do_irq() can schedule another task. */
++	REG_L t0, PT_CLIC_SCAUSE(sp)
++	li t1, 0x00ff0000
++	not t1, t1
++	and t0, t0, t1
++	csrw CSR_CAUSE, t0
++	li t0, SR_SPIE
++	csrc CSR_STATUS, t0
++	li t0, SR_SPP
++	csrs CSR_STATUS, t0
++	la t0, .Lmetalio_clic_level_popped
++	csrw CSR_EPC, t0
++	sret
++.Lmetalio_clic_level_popped:
++#endif
+ 	call do_irq
+ 	j ret_from_exception
+ 1:
+--- a/drivers/irqchip/irq-riscv-intc.c
++++ b/drivers/irqchip/irq-riscv-intc.c
+@@ -11,6 +11,8 @@
+ #include <linux/bits.h>
+ #include <linux/cpu.h>
+ #include <linux/irq.h>
++#include <linux/io.h>
++#include <linux/sizes.h>
+ #include <linux/irqchip.h>
+ #include <linux/irqdomain.h>
+ #include <linux/interrupt.h>
+@@ -22,6 +24,7 @@
+ #include <asm/hwcap.h>
+ 
+ static struct irq_domain *intc_domain;
++static void __iomem *metalio_clic;
+ static unsigned int riscv_intc_nr_irqs __ro_after_init = BITS_PER_LONG;
+ static unsigned int riscv_intc_custom_base __ro_after_init = BITS_PER_LONG;
+ static unsigned int riscv_intc_custom_nr_irqs __ro_after_init;
+@@ -51,6 +54,11 @@
+ 
+ static void riscv_intc_irq_mask(struct irq_data *d)
+ {
++	/* S31 has CLIC byte enables instead of the supervisor SIE CSR. */
++	if (metalio_clic) {
++		writeb(0, metalio_clic + d->hwirq * 4U + 1U);
++		return;
++	}
+ 	if (IS_ENABLED(CONFIG_32BIT) && d->hwirq >= BITS_PER_LONG)
+ 		csr_clear(CSR_IEH, BIT(d->hwirq - BITS_PER_LONG));
+ 	else
+@@ -59,6 +67,11 @@
+ 
+ static void riscv_intc_irq_unmask(struct irq_data *d)
+ {
++	/* S31 has CLIC byte enables instead of the supervisor SIE CSR. */
++	if (metalio_clic) {
++		writeb(1, metalio_clic + d->hwirq * 4U + 1U);
++		return;
++	}
+ 	if (IS_ENABLED(CONFIG_32BIT) && d->hwirq >= BITS_PER_LONG)
+ 		csr_set(CSR_IEH, BIT(d->hwirq - BITS_PER_LONG));
+ 	else
+@@ -178,6 +191,12 @@
+ static int __init riscv_intc_init_common(struct fwnode_handle *fn, struct irq_chip *chip)
+ {
+ 	int rc;
++
++	if (IS_ENABLED(CONFIG_ESP32S31_HOSTED)) {
++		metalio_clic = ioremap(0x10a01000, SZ_4K);
++		if (!metalio_clic)
++			return -ENOMEM;
++	}
+ 
+ 	intc_domain = irq_domain_create_tree(fn, &riscv_intc_domain_ops, chip);
+ 	if (!intc_domain) {
+--- a/drivers/irqchip/irq-esp-clic.c
++++ b/drivers/irqchip/irq-esp-clic.c
+@@ -30,6 +30,7 @@
+ #include <linux/irqchip.h>
+ #include <linux/irqchip/chained_irq.h>
+ #include <linux/irqdomain.h>
++#include <linux/irqflags.h>
+ #include <linux/of.h>
+ #include <linux/of_address.h>
+ #include <linux/of_irq.h>
+@@ -122,6 +123,7 @@
+ {
+ 	unsigned int idx = slot_to_idx(slot);
+ 	unsigned int intc_virq;
++	unsigned long flags;
+ 
+ 	if (priv->intc_virqs[idx])
+ 		return 0;	/* already installed (shared slot) */
+@@ -132,9 +134,14 @@
+ 		return -ENXIO;
+ 	}
+ 
++	/* Parent startup unmasks the slot before the child mapping is published. */
++	local_irq_save(flags);
+ 	irq_set_chained_handler_and_data(intc_virq, esp_clic_chained_handler,
+ 					 priv);
++	writeb(0, priv->base + CLIC_INTIE_OFF(slot));
++	mb();
+ 	priv->intc_virqs[idx] = intc_virq;
++	local_irq_restore(flags);
+ 	return 0;
+ }
+ 

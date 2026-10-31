@@ -1,0 +1,50 @@
+{
+  "sources": {
+    "buildroot": {
+      "url": "https://gitlab.com/buildroot.org/buildroot.git",
+      "commit": "aa2d7ca53f704af901f6c33c13e4bb1591886700"
+    },
+    "linux": {
+      "url": "https://github.com/espressif/linux.git",
+      "commit": "b3bd414d03b8eebb2e44edf08c86058d55e403b3"
+    },
+    "u-boot": {
+      "url": "https://github.com/espressif/u-boot.git",
+      "commit": "333c7a31f49d0ecc796edc7b6f7d44c4fcd1e9f8"
+    },
+    "opensbi": {
+      "url": "https://github.com/espressif/opensbi.git",
+      "commit": "5395e03e1cb295257142cfdeaade6334f1543bcb"
+    },
+    "esp-linux-bsp": {
+      "url": "https://github.com/espressif/esp-linux-bsp.git",
+      "commit": "a427cfbf5cccebd4f4e571db8a111ff1f5d31d71"
+    }
+  },
+  "tools": {
+    "riscv-toolchain-x86_64": {
+      "url": "https://dl.espressif.com/dl/toolchains/preview/riscv64/14.1.1_20260922/riscv64-esp-linux-musl-14.1.1_20260922-x86_64-linux-gnu.tar.xz",
+      "sha256": "e04069baebe4aca9ebd6d2a235adc400e89c661e51a32c8a0d221a01e484081b"
+    },
+    "esptool": {
+      "version": "5.5.0"
+    }
+  },
+  "reference": {
+    "esp-buildroot-external": "a652ea95343201b592358cc4c477cbdda4f90f5b"
+  },
+  "wifi_sources": {
+    "esp-idf": {
+      "url": "https://github.com/espressif/esp-idf.git",
+      "commit": "fff9895c82d744c7237be8847347bdd1b07c6643"
+    },
+    "esp-hosted-linux": {
+      "url": "https://github.com/espressif/esp-hosted-linux.git",
+      "commit": "5b717715613527d005fb7ea1ae23c8f73d764271"
+    },
+    "wifi-reference": {
+      "url": "https://github.com/annoyedmilk/esp32-s31-linux.git",
+      "commit": "2f3eb1268edd1bb2ca002eb4be339a635003b1e4"
+    }
+  }
+}

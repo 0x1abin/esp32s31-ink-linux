@@ -1,0 +1,44 @@
+From: Metalio Linux contributors
+
+Consolidated against the pinned sources.lock.json revisions.
+Retains the final behavior and original file licenses of the source patches.
+
+--- a/components/spi_flash/esp_flash_api.c
++++ b/components/spi_flash/esp_flash_api.c
+@@ -4,6 +4,7 @@
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
++#include <inttypes.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <sys/param.h>
+@@ -1604,7 +1605,8 @@
+         return ESP_ERR_INVALID_ARG;
+     } else {
+         if ((chip->chip_drv->get_chip_caps(chip) & SPI_FLASH_CHIP_CAP_SUSPEND) == 0) {
+-            ESP_EARLY_LOGE(TAG, "Suspend and resume may not supported for this flash model yet.");
++            ESP_EARLY_LOGE(TAG, "Suspend/resume unsupported: JEDEC=0x%06" PRIx32
++                           ", driver=%s", chip->chip_id, chip->chip_drv->name);
+             return ESP_ERR_NOT_SUPPORTED;
+         }
+     }
+--- a/components/spi_flash/spi_flash_chip_generic.c
++++ b/components/spi_flash/spi_flash_chip_generic.c
+@@ -679,6 +679,16 @@
+     // 32M-bits address support
+ 
+     // flash suspend support
++#if CONFIG_IDF_TARGET_ESP32S31 && CONFIG_SPI_FLASH_AUTO_SUSPEND
++    // PY25Q128HA v2.3 Table 5-4: 30us suspend, >=100us resume for progress.
++    if (chip->chip_id == 0x852018 &&
++        CONFIG_SPI_FLASH_SUSPEND_TSUS_VAL_US >= 30 &&
++        CONFIG_SPI_FLASH_SUSPEND_TRS_VAL_US >= 100) {
++        // Generic setup uses 75h/7Ah and 35h bit7 (SUS), matching this part.
++        caps_flags |= SPI_FLASH_CHIP_CAP_SUSPEND;
++    }
++#endif
++
+     // XMC-D support suspend
+     if (chip->chip_id >> 16 == 0x46) {
+         caps_flags |= SPI_FLASH_CHIP_CAP_SUSPEND;

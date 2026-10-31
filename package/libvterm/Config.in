@@ -1,0 +1,5 @@
+config BR2_PACKAGE_LIBVTERM
+	bool "libvterm"
+	help
+	  Small terminal emulator library for the local e-paper terminal.
+	  https://www.leonerd.org.uk/code/libvterm/

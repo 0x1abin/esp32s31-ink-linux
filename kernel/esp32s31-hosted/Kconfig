@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config ESP32S31_HOSTED
+	bool "Metalio ESP32-S31 ESP-Hosted shared-memory Wi-Fi"
+	depends on ARCH_ESPRESSIF && ESP_CLIC && OF && CFG80211=y && MTD=y
+	depends on BT != m
+	help
+	  Linux runs on CPU1; CPU0 runs the matching ESP-IDF Wi-Fi firmware.
+	  Exposes cfg80211 station networking and only the data flash partition.

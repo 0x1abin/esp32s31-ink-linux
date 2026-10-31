@@ -1,0 +1,15 @@
+{
+  "flash_size": 16777216,
+  "erase_size": 65536,
+  "data_offset": 15728640,
+  "data_size": 1048576,
+  "slots": [
+    {"file": "wifi-bootloader.bin", "offset": 8192, "limit": 32768},
+    {"file": "wifi-partition-table.bin", "offset": 32768, "limit": 36864},
+    {"file": "esp32s31-linux-companion.bin", "offset": 65536, "limit": 3145728},
+    {"file": "fw_jump.bin", "offset": 3145728, "limit": 4194304},
+    {"file": "metalio-eink4-plus-wifi.dtb", "offset": 4194304, "limit": 5242880},
+    {"file": "xipImage", "offset": 5242880, "limit": 9437184},
+    {"file": "rootfs.cramfs", "offset": 9437184, "limit": 15728640}
+  ]
+}

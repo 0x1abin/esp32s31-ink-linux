@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+#include "esp32s31.dts"
+
+/ {
+	model = "Metalio E-Ink4 Plus (ESP32-S31, E0470A14-AF)";
+	compatible = "metalio,eink4-plus", "esp,esp32s31";
+
+	aliases {
+		serial1 = &usb_jtag;
+	};
+
+	chosen {
+		stdout-path = "serial1:115200n8";
+		bootargs = "earlycon=sbi console=ttyS0 console=ttyGS1 root=mtd:rootfs rootfstype=cramfs ro swiotlb=128";
+	};
+
+	soc {
+		hp_system: syscon@20586000 {
+			compatible = "esp,esp32s31-hp-system", "syscon";
+			reg = <0x20586000 0x400>;
+		};
+
+		epd: epd@20396000 {
+			compatible = "metalio,eink4-plus-epd";
+			reg = <0x20396000 0x100>, <0x20348000 0x1000>,
+			      <0x20355000 0x800>, <0x20355800 0x800>;
+			reg-names = "lcd-cam", "axi-dma", "rmt", "rmtmem";
+			interrupt-parent = <&intmtx>;
+			interrupts = <13 IRQ_TYPE_LEVEL_HIGH>, <51 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "lcd", "dma";
+			hp-clkrst = <&sysctl>;
+			hp-system = <&hp_system>;
+			gpio-matrix = <&gpio>;
+			iomux = <&pinctrl>;
+			i2c-bus = <&i2c0>;
+			memory-region = <&dma_pool>;
+			dma-noncoherent;
+			vcom-millivolt = <1200>;
+			oe-gpios = <&gpio 18 GPIO_ACTIVE_HIGH>;
+			mode-gpios = <&gpio 19 GPIO_ACTIVE_HIGH>;
+			border-gpios = <&gpio 37 GPIO_ACTIVE_HIGH>;
+			stv-gpios = <&gpio 35 GPIO_ACTIVE_HIGH>;
+			wakeup-gpios = <&ioexp 2 GPIO_ACTIVE_HIGH>;
+			pwrup-gpios = <&ioexp 1 GPIO_ACTIVE_HIGH>;
+			vcom-gpios = <&ioexp 0 GPIO_ACTIVE_HIGH>;
+			powergood-gpios = <&ioexp 7 GPIO_ACTIVE_HIGH>;
+			panel-power-gpios = <&ioexp 5 GPIO_ACTIVE_HIGH>;
+			bus-gpios = <&gpio 8 GPIO_ACTIVE_HIGH>, <&gpio 9 GPIO_ACTIVE_HIGH>,
+				    <&gpio 10 GPIO_ACTIVE_HIGH>, <&gpio 11 GPIO_ACTIVE_HIGH>,
+				    <&gpio 12 GPIO_ACTIVE_HIGH>, <&gpio 13 GPIO_ACTIVE_HIGH>,
+				    <&gpio 14 GPIO_ACTIVE_HIGH>, <&gpio 15 GPIO_ACTIVE_HIGH>,
+				    <&gpio 16 GPIO_ACTIVE_HIGH>, <&gpio 17 GPIO_ACTIVE_HIGH>,
+				    <&gpio 4 GPIO_ACTIVE_HIGH>, <&gpio 40 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&usb_jtag {
+	compatible = "esp,esp32s31-usb-serial-jtag", "esp,esp32s3-acm", "syscon";
+	interrupt-parent = <&intmtx>;
+	interrupts = <2 IRQ_TYPE_LEVEL_HIGH>;
+	status = "okay";
+};
+
+&i2c0_pins {
+	pinmux = <ESP_PINMUX(0, ESP_FUNC_S31_I2C0_SDA_ID)>,
+		 <ESP_PINMUX(1, ESP_FUNC_S31_I2C0_SCL_ID)>;
+};
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <100000>;
+
+	ioexp: gpio@20 {
+		compatible = "ti,tca9555", "nxp,pca9555";
+		reg = <0x20>;
+		gpio-controller;
+		#gpio-cells = <2>;
+
+		shared-power-high {
+			gpio-hog;
+			gpios = <12 GPIO_ACTIVE_HIGH>;
+			output-high;
+			line-name = "shared-vout-enable";
+		};
+
+		unused-outputs-low {
+			gpio-hog;
+			gpios = <3 GPIO_ACTIVE_HIGH>, <4 GPIO_ACTIVE_HIGH>,
+				<11 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "motor-amplifier-shutdown-off";
+		};
+	};
+
+	touchscreen@38 {
+		compatible = "metalio,ft6336u";
+		reg = <0x38>;
+		interrupt-parent = <&gpio>;
+		interrupts = <5 IRQ_TYPE_EDGE_BOTH>;
+		reset-gpios = <&ioexp 10 GPIO_ACTIVE_LOW>;
+		touchscreen-size-x = <684>;
+		touchscreen-size-y = <1216>;
+		/* Boot reset shares P12 with the disabled modem/camera; no firmware upgrade. */
+	};
+};
+
+&emac {
+	status = "disabled";
+};
+
+/* Keep the small internal-SRAM DMA pool available for one complete EPD phase. */
+&sdmmc {
+	status = "disabled";
+};
+
+&usb {
+	status = "disabled";
+};

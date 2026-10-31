@@ -1,0 +1,27 @@
+
+
+Consolidated against the pinned sources.lock.json revisions.
+Retains the final behavior and original file licenses of the source patches.
+
+--- a/components/esp_rom/esp32c2/ld/esp32c2.rom.ld
++++ b/components/esp_rom/esp32c2/ld/esp32c2.rom.ld
+@@ -915,7 +915,7 @@
+ /* sta_recv_mgmt = 0x40002094;*/
+ ieee80211_send_setup = 0x40002098;
+ //ieee80211_send_probereq = 0x4000209c;
+-sta_auth_shared = 0x400020a4;
++//sta_auth_shared = 0x400020a4;
+ /* cnx_coexist_timeout_process = 0x400020ac; */
+ ieee80211_alloc_challenge = 0x400020b0;
+ cnx_assoc_timeout = 0x400020b4;
+--- a/components/esp_rom/esp32s31/ld/esp32s31.rom.net80211.ld
++++ b/components/esp_rom/esp32s31/ld/esp32s31.rom.net80211.ld
+@@ -66,7 +66,7 @@
+ wifi_rf_phy_enable = 0x2f800cf4;
+ wifi_is_started = 0x2f800cf8;
+ sta_input = 0x2f800cfc;
+-sta_rx_eapol = 0x2f800d00;
++//sta_rx_eapol = 0x2f800d00;
+ sta_reset_beacon_timeout = 0x2f800d04;
+ sta_get_beacon_timeout = 0x2f800d08;
+ ampdu_process_multicast_address_qos_frame = 0x2f800d0c;

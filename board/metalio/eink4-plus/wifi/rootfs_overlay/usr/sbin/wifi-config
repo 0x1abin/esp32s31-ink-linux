@@ -1,0 +1,69 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+umask 077
+export LC_ALL=C
+
+fail() {
+    echo "Wi-Fi: $1" >&2
+    exit 1
+}
+
+[ "$#" -eq 0 ] || fail 'run wifi-config without arguments; credentials are read privately.'
+[ "$(id -u)" -eq 0 ] || fail 'configuration requires root.'
+awk '$2 == "/data" && $3 == "jffs2" && $4 ~ /(^|,)rw(,|$)/ { found = 1 }
+     END { exit !found }' /proc/mounts || fail 'writable data partition unavailable; run wifi-start.'
+[ -f /data/.metalio-data-v1 ] && [ ! -L /data/.metalio-data-v1 ] &&
+    [ "$(cat /data/.metalio-data-v1)" = metalio-data-v1 ] || fail 'data partition is not initialized.'
+[ ! -L /data/wifi ] || fail 'invalid configuration directory.'
+mkdir -p /data/wifi
+[ "$(stat -c '%u' /data/wifi)" = 0 ] || fail 'configuration directory must belong to root.'
+chmod 0700 /data/wifi
+
+temporary=
+tty_state=
+cleanup() {
+    [ -z "$tty_state" ] || stty "$tty_state" <&3 2>/dev/null || :
+    [ -z "$temporary" ] || rm -f -- "$temporary"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+if ! ( : <> /dev/tty ) 2>/dev/null; then
+    fail 'an interactive local terminal is required.'
+fi
+exec 3<> /dev/tty
+tty_state=$(stty -g <&3)
+printf 'SSID: ' >&3
+IFS= read -r ssid <&3 || fail 'SSID input interrupted.'
+[ "${#ssid}" -ge 1 ] && [ "${#ssid}" -le 32 ] || fail 'SSID must contain 1 to 32 bytes.'
+stty -echo <&3
+printf 'WPA2 password (8-63 bytes, or 64 hex digits): ' >&3
+IFS= read -r password <&3 || fail 'password input interrupted.'
+stty "$tty_state" <&3
+printf '\n' >&3
+
+if [ "${#password}" -eq 64 ]; then
+    case "$password" in *[!0-9a-fA-F]*) fail '64-byte PSK must be hexadecimal.' ;; esac
+    psk=$password
+else
+    [ "${#password}" -ge 8 ] && [ "${#password}" -le 63 ] ||
+        fail 'password must contain 8 to 63 bytes.'
+    # Pass the password through stdin; discard the tool's plaintext comment and errors.
+    psk=$(printf '%s\n' "$password" | wpa_passphrase "$ssid" 2>/dev/null |
+        sed -n 's/^[[:space:]]*psk=//p')
+fi
+unset password
+[ "${#psk}" -eq 64 ] || fail 'could not derive the network key.'
+case "$psk" in *[!0-9a-fA-F]*) fail 'could not derive the network key.' ;; esac
+ssid_hex=$(printf '%s' "$ssid" | od -An -tx1 | tr -d ' \n')
+
+temporary=$(mktemp /data/wifi/.wpa_supplicant.conf.XXXXXX)
+printf 'ctrl_interface=/run/wpa_supplicant\nupdate_config=0\nnetwork={\n    ssid=%s\n    proto=RSN\n    key_mgmt=WPA-PSK\n    psk=%s\n}\n' \
+    "$ssid_hex" "$psk" > "$temporary"
+fsync "$temporary" || fail 'configuration write failed; previous configuration retained.'
+mv -f -- "$temporary" /data/wifi/wpa_supplicant.conf || fail 'configuration replacement failed.'
+temporary=
+fsync /data/wifi || fail 'configuration replaced, but persistence could not be confirmed.'
+echo 'Wi-Fi configuration saved.'
+wifi-stop
+wifi-start

@@ -1,0 +1,2 @@
+# SPDX-License-Identifier: Apache-2.0
+orsource "$ESP32S31_INK_LINUX_HOSTED_PATH/esp/esp_driver/network_adapter/main/Kconfig.projbuild"

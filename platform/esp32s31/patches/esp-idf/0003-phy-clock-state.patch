@@ -1,0 +1,51 @@
+From: wuzhenghui <wuzhenghui@espressif.com>
+
+Consolidated against the pinned sources.lock.json revisions.
+Retains the final behavior and original file licenses of the source patches.
+
+--- a/components/esp_hw_support/modem/port/esp32s31/modem_clock_impl.c
++++ b/components/esp_hw_support/modem/port/esp32s31/modem_clock_impl.c
+@@ -17,7 +17,7 @@
+ #define IEEE802154_CLOCK_DEPS               ( MODEM_CLOCKS( 802154_MAC, BT_I154_COMMON_BB, ETM, COEXIST, WIFI_BB_80X1, SOC_PLL_SOURCE_CG, BT_APB ) )
+ #define COEXIST_CLOCK_DEPS                  ( MODEM_CLOCKS( COEXIST, SOC_PLL_SOURCE_CG ) )
+ #define I2C_ANA_MST_CLOCK_DEPS              ( MODEM_CLOCKS( I2C_MASTER ) )
+-#define PHY_CLOCK_DEPS                      ( MODEM_CLOCKS( MODEM_ADC_COMMON_FE, MODEM_PRIVATE_FE, SOC_PLL_SOURCE_CG ) | I2C_ANA_MST_CLOCK_DEPS )
++#define PHY_CLOCK_DEPS                      ( MODEM_CLOCKS( MODEM_ADC_COMMON_FE, MODEM_PRIVATE_FE, SOC_PLL_SOURCE_CG, WIFI_BB_80X1) | I2C_ANA_MST_CLOCK_DEPS )
+ #define MODEM_ETM_CLOCK_DEPS                ( MODEM_CLOCKS( ETM ) )
+ #define MODEM_ADC_COMMON_FE_CLOCK_DEPS      ( MODEM_CLOCKS( MODEM_ADC_COMMON_FE, SOC_PLL_SOURCE_CG ) )
+ #define PHY_CALIBRATION_WIFI_CLOCK_DEPS     ( MODEM_CLOCKS( WIFI_APB, WIFI_BB, WIFI_BB_44M, WIFI_BB_80X1, SOC_PLL_SOURCE_CG ) )
+--- a/components/esp_phy/src/phy_init.c
++++ b/components/esp_phy/src/phy_init.c
+@@ -892,6 +892,18 @@
+ }
+ #endif
+ 
++#if CONFIG_ESP_PHY_ENABLED && SOC_DEEP_SLEEP_SUPPORTED
++static void phy_deep_sleep_prepare(void)
++{
++    if (phy_get_modem_flag() != 0) {
++        phy_close_rf();
++#if !CONFIG_IDF_TARGET_ESP32
++        phy_xpd_tsens();
++#endif
++    }
++}
++#endif
++
+ void esp_phy_load_cal_and_init(void)
+ {
+     char * phy_version = get_phy_version_str();
+@@ -983,12 +995,7 @@
+     esp_phy_release_init_data(init_data);
+ #endif
+ #if CONFIG_ESP_PHY_ENABLED && SOC_DEEP_SLEEP_SUPPORTED
+-    ESP_ERROR_CHECK(esp_deep_sleep_register_phy_hook(&phy_close_rf));
+-#endif
+-#if !CONFIG_IDF_TARGET_ESP32
+-#if CONFIG_ESP_PHY_ENABLED && SOC_DEEP_SLEEP_SUPPORTED
+-    ESP_ERROR_CHECK(esp_deep_sleep_register_phy_hook(&phy_xpd_tsens));
+-#endif
++    ESP_ERROR_CHECK(esp_deep_sleep_register_phy_hook(&phy_deep_sleep_prepare));
+ #endif
+ 
+     free(cal_data); // PHY maintains a copy of calibration data, so we can free this

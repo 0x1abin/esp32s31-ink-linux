@@ -1,0 +1,19 @@
+config BR2_PACKAGE_ESP32S31_LINUX_COMPANION
+	bool "ESP32-S31 Linux companion firmware and persistent configuration"
+	depends on BR2_LINUX_KERNEL
+	depends on BR2_RISCV_32
+	depends on BR2_ESP32S31_INK_LINUX_PLATFORM_SUPPORT
+	select BR2_PACKAGE_WPA_SUPPLICANT
+	select BR2_PACKAGE_WPA_SUPPLICANT_NL80211
+	select BR2_PACKAGE_WPA_SUPPLICANT_CLI
+	select BR2_PACKAGE_WPA_SUPPLICANT_PASSPHRASE
+	select BR2_PACKAGE_IFUPDOWN_SCRIPTS
+	help
+	  ESP-Hosted on CPU0 with Linux on CPU1, WPA2 station networking and
+	  an independent JFFS2 data partition. Use the Wi-Fi board defconfig.
+
+config BR2_PACKAGE_ESP32S31_LINUX_COMPANION_BOARD_DIR
+	string "Companion firmware board configuration directory"
+	depends on BR2_PACKAGE_ESP32S31_LINUX_COMPANION
+	help
+	  Directory containing sdkconfig.defaults and partitions.csv for the board.

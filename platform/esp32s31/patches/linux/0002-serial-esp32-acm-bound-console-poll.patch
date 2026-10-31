@@ -1,0 +1,38 @@
+Subject: [PATCH] serial: esp32_acm: bound console polling with IRQs disabled
+
+Console writes hold the port lock with local interrupts disabled. On a
+single hart, jiffies cannot advance while waiting for a disconnected USB
+host, so the old timeout could wait forever. Use an atomic bounded poll
+and drop the console character on timeout; logging from this path would
+reenter the console.
+
+--- a/drivers/tty/serial/esp32_acm.c
++++ b/drivers/tty/serial/esp32_acm.c
+@@ -6,6 +6,7 @@
+ #include <linux/delay.h>
+ #include <linux/io.h>
+ #include <linux/irq.h>
++#include <linux/iopoll.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
+@@ -138,14 +139,11 @@
+ static void esp32s3_acm_put_char_sync(struct uart_port *port, u8 c)
+ {
+-	unsigned long timeout = jiffies + HZ;
++	u32 ready;
+ 
+-	while (!esp32s3_acm_tx_fifo_free(port)) {
+-		if (time_after(jiffies, timeout)) {
+-			dev_warn(port->dev, "timeout waiting for TX FIFO\n");
+-			return;
+-		}
+-		cpu_relax();
+-	}
++	if (read_poll_timeout_atomic(esp32s3_acm_tx_fifo_free, ready, ready,
++				    1, 1000, false, port))
++		return;
++
+ 	esp32s3_acm_put_char(port, c);
+ 	esp32s3_acm_push(port);
+ }

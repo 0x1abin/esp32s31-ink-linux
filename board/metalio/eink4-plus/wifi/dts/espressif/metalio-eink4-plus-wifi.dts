@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+#include "metalio-eink4-plus.dts"
+
+/ {
+    model = "Metalio E-Ink4 Plus (ESP32-S31 Wi-Fi)";
+    compatible = "metalio,eink4-plus-wifi", "metalio,eink4-plus", "esp,esp32s31";
+
+    cpus {
+        /delete-node/ cpu@0;
+        cpu1: cpu@1 {
+            device_type = "cpu";
+            reg = <1>;
+            compatible = "riscv";
+            riscv,isa = "rv32imac_zicsr_zifencei";
+            riscv,isa-base = "rv32i";
+            riscv,isa-extensions = "i", "m", "a", "c", "zicsr", "zifencei";
+            mmu-type = "riscv,sv32";
+            clock-frequency = <320000000>;
+            cpu1_intc: interrupt-controller {
+                #interrupt-cells = <1>;
+                interrupt-controller;
+                compatible = "riscv,cpu-intc";
+            };
+        };
+    };
+
+    reserved-memory {
+        fw_heap: radio-heap@50e80000 {
+            reg = <0x50e80000 0x40000>;
+            no-map;
+        };
+        sbi_guard: guard@50eff000 {
+            reg = <0x50eff000 0x1000>;
+            no-map;
+        };
+        sbi_memory: opensbi@50f00000 {
+            reg = <0x50f00000 0x30000>;
+            no-map;
+        };
+        hosted_memory: hosted-shm@2f020000 {
+            reg = <0x2f020000 0xd000>;
+            no-map;
+        };
+    };
+
+    soc {
+        /delete-node/ interrupt-controller@20585000;
+        intmtx: interrupt-controller@20585800 {
+            compatible = "esp,esp32s31-intmtx";
+            reg = <0x20585800 0x800>;
+            interrupt-controller;
+            #interrupt-cells = <2>;
+            interrupt-parent = <&clic>;
+        };
+        /delete-node/ flash@40b00000;
+        rootflash: flash@40800000 {
+            compatible = "mtd-rom";
+            reg = <0x40800000 0x600000>;
+            bank-width = <4>;
+            linux,mtd-name = "rootfs";
+            #address-cells = <1>;
+            #size-cells = <1>;
+        };
+        wifi: wifi@2f020000 {
+            compatible = "esp,esp32s31-hosted-shm";
+            reg = <0x2f020000 0xd000>, <0x20586014 8>;
+            reg-names = "shm", "doorbell";
+            interrupt-parent = <&intmtx>;
+            interrupts = <67 IRQ_TYPE_LEVEL_HIGH>;
+            #address-cells = <1>;
+            #size-cells = <1>;
+            flash@f00000 {
+                reg = <0xf00000 0x100000>;
+            };
+        };
+    };
+};
+
+&clic { interrupt-parent = <&cpu1_intc>; };
+&systimer { status = "disabled"; };

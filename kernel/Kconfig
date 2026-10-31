@@ -1,0 +1,26 @@
+config METALIO_EPD
+	tristate "Metalio E-Ink4 Plus ESP32-S31 parallel panel"
+	depends on OF && HAS_DMA && I2C && GPIOLIB
+	select MFD_SYSCON
+	help
+	  Native E0470A14-AF scanning using exclusive LCD-CAM, AXI-DMA TX0
+	  and RMT channel 0. Exposes /dev/metalio-epd. The DT must disable
+	  other consumers of those peripherals and of the panel pins.
+
+config METALIO_EPD_FAST_REFRESH
+	bool "Metalio DU14 and short keyboard feedback"
+	depends on METALIO_EPD
+	default y
+	help
+	  Use DU14 and FOLLOW8 binary endpoints and reuse adjacent identical
+	  phase data. Disable to restore DU20 without short feedback. Both
+	  choices use the original 20 MHz / 17 us scan timing and a minimum
+	  12 ms phase start-to-start interval.
+
+config TOUCHSCREEN_METALIO_FT6336U
+	tristate "Metalio E-Ink4 Plus FT6336U touchscreen and Enter keys"
+	depends on OF && I2C && GPIOLIB && INPUT
+	help
+	  Board-specific FT6336U portrait touchscreen and three capacitive
+	  keys: left confirm requests a refresh, page keys report Enter.
+	  Requires the Metalio reset and IRQ pins.

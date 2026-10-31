@@ -1,0 +1,5 @@
+CONFIG_SMCLIC=y
+# CONFIG_SMDBLTRP is not set
+# CONFIG_SBI_ECALL_FWFT is not set
+# CONFIG_SBI_ECALL_DBTR is not set
+# CONFIG_SBI_ECALL_SSE is not set

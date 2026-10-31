@@ -1,0 +1,2 @@
+config BR2_PACKAGE_HOST_ESP_LINUX_BSP
+	bool "Espressif image packaging tools"

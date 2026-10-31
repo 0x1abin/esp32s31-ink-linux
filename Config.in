@@ -1,0 +1,13 @@
+menu "esp32s31-ink-linux"
+config BR2_ESP32S31_INK_LINUX_PLATFORM_SUPPORT
+	bool "ESP32-S31 platform integration"
+	depends on BR2_RISCV_32
+	help
+	  Enable the ESP32-S31 kernel and boot integration selected by board defconfigs.
+
+source "$BR2_EXTERNAL_ESP32S31_INK_LINUX_PATH/package/dropbear-client-only/Config.in"
+source "$BR2_EXTERNAL_ESP32S31_INK_LINUX_PATH/package/libvterm/Config.in"
+source "$BR2_EXTERNAL_ESP32S31_INK_LINUX_PATH/package/metalio-epd/Config.in"
+source "$BR2_EXTERNAL_ESP32S31_INK_LINUX_PATH/package/esp32s31-linux-companion/Config.in"
+source "$BR2_EXTERNAL_ESP32S31_INK_LINUX_PATH/package/esp-linux-bsp/Config.in"
+endmenu

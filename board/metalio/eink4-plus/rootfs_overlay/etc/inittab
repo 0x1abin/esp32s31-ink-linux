@@ -1,0 +1,10 @@
+# Root is a read-only cramfs; transient files live in tmpfs.
+::sysinit:/bin/mkdir -p /dev/pts
+::sysinit:/bin/mount -a
+::sysinit:/bin/mkdir -m 0700 -p /run/ssh
+::sysinit:/sbin/ifconfig lo 127.0.0.1 up
+::once:/usr/bin/metalio-terminal
+ttyGS1::respawn:/sbin/getty -n -l /bin/sh 115200 ttyGS1 vt100
+ttyS0::respawn:/sbin/getty -n -l /bin/sh 115200 ttyS0 vt100
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r

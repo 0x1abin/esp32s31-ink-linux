@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: BSD-2-Clause
+cmake_minimum_required(VERSION 3.16)
+if(NOT DEFINED ENV{ESP32S31_INK_LINUX_PROJECT_DIR})
+    get_filename_component(project_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+    set(ENV{ESP32S31_INK_LINUX_PROJECT_DIR} "${project_root}")
+endif()
+if(NOT DEFINED ENV{ESP32S31_INK_LINUX_HOSTED_PATH})
+    get_filename_component(hosted "$ENV{ESP32S31_INK_LINUX_PROJECT_DIR}/upstream/esp-hosted-linux" ABSOLUTE)
+    set(ENV{ESP32S31_INK_LINUX_HOSTED_PATH} "${hosted}")
+endif()
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+idf_build_set_property(MINIMAL_BUILD ON)
+project(esp32s31-linux-companion)
+# Assert and log strings must not expose the build machine directory.
+idf_build_set_property(COMPILE_OPTIONS "-ffile-prefix-map=$ENV{ESP32S31_INK_LINUX_PROJECT_DIR}=." APPEND)

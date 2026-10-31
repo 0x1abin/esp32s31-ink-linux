@@ -1,0 +1,7 @@
+auto lo
+iface lo inet loopback
+
+# wifi-start supplies the persistent configuration; no open-network fallback.
+iface wlan0 inet dhcp
+    wait-delay 10
+    wpa-conf /data/wifi/wpa_supplicant.conf

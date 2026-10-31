@@ -1,0 +1,253 @@
+From: Sudeep Mohanty <sudeep.mohanty@espressif.com>
+From: Zhou Xiao <zhouxiao@espressif.com>
+
+Consolidated against the pinned sources.lock.json revisions.
+Retains the final behavior and original file licenses of the source patches.
+
+--- a/components/esp_timer/private_include/esp_timer_impl.h
++++ b/components/esp_timer/private_include/esp_timer_impl.h
+@@ -142,9 +142,18 @@
+ 
+ #if CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
+ /**
+- * @brief Set the next alarm if there is such an alarm in the cached array.
++ * @brief Check which alarm slots have fired and disarm them.
+  *
+- * @note Available only when CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD is enabled.
++ * For each dispatch method (TASK and ISR), checks if the cached alarm deadline
++ * has expired. If so, clears the deadline (resets to UINT64_MAX) and sets the
++ * corresponding bit in the returned mask. After processing both slots,
++ * reprograms the hardware alarm to the earliest remaining cached deadline.
++ *
++ * Must be called only from ISR context.
++ *
++ * @return Bitmask of the dispatch methods whose alarm was due:
++ *         bit 0 set means the TASK-dispatch alarm fired,
++ *         bit 1 set means the ISR-dispatch alarm fired.
+  */
+-void esp_timer_impl_try_to_set_next_alarm(void);
++uint32_t esp_timer_impl_claim_due_alarms(void);
+ #endif
+--- a/components/esp_timer/src/esp_timer.c
++++ b/components/esp_timer/src/esp_timer.c
+@@ -156,12 +156,18 @@
+         return ESP_ERR_INVALID_ARG;
+     }
+ 
+-    if (!is_initialized() || !timer_armed(timer)) {
++    if (!is_initialized()) {
+         return ESP_ERR_INVALID_STATE;
+     }
+ 
+     esp_timer_dispatch_t dispatch_method = timer->flags & FL_ISR_DISPATCH_METHOD;
+     timer_list_lock(dispatch_method);
++
++    /* The timer may expire while this task is waiting for the list lock. */
++    if (!timer_armed(timer)) {
++        timer_list_unlock(dispatch_method);
++        return ESP_ERR_INVALID_STATE;
++    }
+ 
+     const int64_t now = esp_timer_impl_get_time();
+     const uint64_t period = timer->period;
+@@ -475,13 +481,11 @@
+ }
+ 
+ #ifdef CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
+-static ESP_TIMER_IRAM_ATTR bool timer_process_alarm(esp_timer_dispatch_t dispatch_method)
+-#else
+-static bool timer_process_alarm(esp_timer_dispatch_t dispatch_method)
+-#endif
+-{
+-    timer_list_lock(dispatch_method);
+-    bool processed = false;
++ESP_TIMER_IRAM_ATTR
++#endif
++static void timer_process_alarm(esp_timer_dispatch_t dispatch_method)
++{
++    timer_list_lock(dispatch_method);
+     esp_timer_handle_t it;
+     while (1) {
+         it = LIST_FIRST(&s_timers[dispatch_method]);
+@@ -491,7 +495,6 @@
+             break;
+         }
+         ESP_COMPILER_DIAGNOSTIC_POP("-Wanalyzer-use-after-free")
+-        processed = true;
+         LIST_REMOVE(it, list_entry);
+         if (it->event_id == EVENT_ID_DELETE_TIMER) {
+             // It is handled only by ESP_TIMER_TASK (see esp_timer_delete()).
+@@ -533,17 +536,9 @@
+ #endif
+         }
+     } // while(1)
+-    if (it) {
+-        if (dispatch_method == ESP_TIMER_TASK || (dispatch_method != ESP_TIMER_TASK && processed == true)) {
+-            esp_timer_impl_set_alarm_id(it->alarm, dispatch_method);
+-        }
+-    } else {
+-        if (processed) {
+-            esp_timer_impl_set_alarm_id(UINT64_MAX, dispatch_method);
+-        }
+-    }
+-    timer_list_unlock(dispatch_method);
+-    return processed;
++    uint64_t next_alarm = (it != NULL) ? it->alarm : UINT64_MAX;
++    esp_timer_impl_set_alarm_id(next_alarm, dispatch_method);
++    timer_list_unlock(dispatch_method);
+ }
+ 
+ static void timer_task(void* arg)
+@@ -561,24 +556,30 @@
+     assert(xPortInIsrContext());
+     s_isr_dispatch_need_yield = pdTRUE;
+ }
++
+ #endif
+ 
+ static void ESP_TIMER_IRAM_ATTR timer_alarm_handler(void* arg)
+ {
+     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+-    bool isr_timers_processed = false;
+ 
+ #ifdef CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
+-    esp_timer_impl_try_to_set_next_alarm();
+-    // process timers with ISR dispatch method
+-    isr_timers_processed = timer_process_alarm(ESP_TIMER_ISR);
++    uint32_t due_alarm_mask = esp_timer_impl_claim_due_alarms();
++
++    if (due_alarm_mask & (1U << ESP_TIMER_ISR)) {
++        timer_process_alarm(ESP_TIMER_ISR);
++    }
++
+     xHigherPriorityTaskWoken = s_isr_dispatch_need_yield;
+     s_isr_dispatch_need_yield = pdFALSE;
+-#endif
+-
+-    if (isr_timers_processed == false) {
++
++    if (due_alarm_mask & (1U << ESP_TIMER_TASK)) {
+         vTaskNotifyGiveFromISR(s_timer_task, &xHigherPriorityTaskWoken);
+     }
++#else
++    vTaskNotifyGiveFromISR(s_timer_task, &xHigherPriorityTaskWoken);
++#endif
++
+     if (xHigherPriorityTaskWoken == pdTRUE) {
+         portYIELD_FROM_ISR();
+     }
+--- a/components/esp_timer/src/esp_timer_impl_common.c
++++ b/components/esp_timer/src/esp_timer_impl_common.c
+@@ -38,29 +38,28 @@
+ }
+ 
+ #ifdef CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
+-void ESP_TIMER_IRAM_ATTR esp_timer_impl_try_to_set_next_alarm(void)
++/* Reprogram the hardware alarm to the nearest pending deadline,
++ * i.e. MIN(timestamp_id[0], timestamp_id[1]). The timestamp_id[] cache is not modified.
++ * Must be called with s_time_update_lock held. */
++static inline void ESP_TIMER_IRAM_ATTR esp_timer_impl_rearm_alarm(void)
++{
++    esp_timer_impl_set_alarm_id(timestamp_id[ESP_TIMER_TASK], ESP_TIMER_TASK);
++}
++
++uint32_t ESP_TIMER_IRAM_ATTR esp_timer_impl_claim_due_alarms(void)
+ {
+     portENTER_CRITICAL_ISR(&s_time_update_lock);
+-    unsigned now_alarm_idx;  // ISR is called due to this current alarm
+-    unsigned next_alarm_idx; // The following alarm after now_alarm_idx
+-    if (timestamp_id[0] < timestamp_id[1]) {
+-        now_alarm_idx = 0;
+-        next_alarm_idx = 1;
+-    } else {
+-        now_alarm_idx = 1;
+-        next_alarm_idx = 0;
++    uint64_t now = esp_timer_impl_get_time();
++    uint32_t due_mask = 0;
++    for (unsigned alarm_id = 0; alarm_id < sizeof(timestamp_id) / sizeof(timestamp_id[0]); ++alarm_id) {
++        if (timestamp_id[alarm_id] <= now) {
++            due_mask |= 1U << alarm_id;
++            timestamp_id[alarm_id] = UINT64_MAX;
++        }
+     }
+-
+-    if (timestamp_id[next_alarm_idx] != UINT64_MAX) {
+-        // The following alarm is valid and can be used.
+-        // Remove the current alarm from consideration.
+-        esp_timer_impl_set_alarm_id(UINT64_MAX, now_alarm_idx);
+-    } else {
+-        // There is no the following alarm.
+-        // Remove the current alarm from consideration as well.
+-        timestamp_id[now_alarm_idx] = UINT64_MAX;
+-    }
++    esp_timer_impl_rearm_alarm();
+     portEXIT_CRITICAL_ISR(&s_time_update_lock);
++    return due_mask;
+ }
+ #endif
+ 
+--- a/components/esp_timer/test_apps/main/test_esp_timer.c
++++ b/components/esp_timer/test_apps/main/test_esp_timer.c
+@@ -992,6 +992,62 @@
+     vTaskDelay(3); // wait for the esp_timer task to delete all timers
+ }
+ 
++#if CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD && !CONFIG_IDF_TARGET_LINUX
++IRAM_ATTR static void restart_expiry_race_timer_cb(void* arg)
++{
++    ++(*(volatile uint32_t*)arg);
++}
++
++TEST_CASE("one-shot timer expiry racing with restart", "[esp_timer]")
++{
++    volatile uint32_t callback_count = 0;
++    size_t restart_wins_count = 0;
++    size_t expiry_wins_count = 0;
++    esp_timer_handle_t timer;
++
++    const esp_timer_create_args_t create_args = {
++        .callback = restart_expiry_race_timer_cb,
++        .arg = (void*) &callback_count,
++        .dispatch_method = ESP_TIMER_ISR,
++        .name = "restart_expiry_race",
++    };
++    TEST_ESP_OK(esp_timer_create(&create_args, &timer));
++
++    const size_t iterations = 1000;
++    for (size_t i = 0; i < iterations; ++i) {
++        uint32_t previous_callback_count = callback_count;
++        TEST_ESP_OK(esp_timer_start_once(timer, 100));
++
++        uint64_t expiry;
++        TEST_ESP_OK(esp_timer_get_expiry_time(timer, &expiry));
++
++        while (esp_timer_get_time() + 1 < expiry) { };
++
++        /* The esp_timer_restart() and timer ISR race for the timer-list lock.
++         * - If restart() gets the lock first, it reschedules the armed timer and the old
++         * callback must not run, leaving callback_count unchanged.
++         * - If the ISR gets it first, it removes the expired one-shot timer.
++         * Restart then sees it unarmed and fails; the ISR subsequently invokes
++         * the callback, incrementing callback_count. */
++        esp_err_t result = esp_timer_restart(timer, SEC);
++        if (result == ESP_OK) {
++            ++restart_wins_count;
++            esp_rom_delay_us(50);
++            TEST_ASSERT_EQUAL_UINT32(previous_callback_count, callback_count);
++            TEST_ESP_OK(esp_timer_stop(timer));
++        } else {
++            ++expiry_wins_count;
++            TEST_ESP_ERR(ESP_ERR_INVALID_STATE, result);
++            esp_rom_delay_us(200);
++            TEST_ASSERT_NOT_EQUAL(previous_callback_count, callback_count);
++        }
++    }
++
++    printf("restart_wins_count=%zu, expiry_wins_count=%zu\n", restart_wins_count, expiry_wins_count);
++    TEST_ESP_OK(esp_timer_delete(timer));
++}
++#endif
++
+ #ifdef CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
+ static int64_t old_time[2];
+ 

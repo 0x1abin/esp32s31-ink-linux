@@ -1,0 +1,17 @@
+Subject: [PATCH] serial: esp32_acm: allow the ESP32-S31 RISC-V platform
+
+ESP32-S31 has the same USB Serial/JTAG endpoint register layout as the S3.
+Match the existing ESP32 UART driver's RISC-V Kconfig dependency so the
+on-chip USB console is available without enabling COMPILE_TEST.
+
+--- a/drivers/tty/serial/Kconfig
++++ b/drivers/tty/serial/Kconfig
+@@ -1608,7 +1608,7 @@ config SERIAL_ESP32
+ 
+ config SERIAL_ESP32_ACM
+ 	tristate "Espressif ESP32 USB ACM gadget support"
+-	depends on XTENSA_PLATFORM_ESP32 || (COMPILE_TEST && OF)
++	depends on XTENSA_PLATFORM_ESP32 || (ARCH_ESPRESSIF && ARCH_RV32I) || (COMPILE_TEST && OF)
+ 	select SERIAL_CORE
+ 	select SERIAL_CORE_CONSOLE
+ 	select SERIAL_EARLYCON

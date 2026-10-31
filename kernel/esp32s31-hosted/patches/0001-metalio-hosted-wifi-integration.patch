@@ -1,0 +1,290 @@
+From: Marco Müller <hello@annoyedmilk.ch>
+From: Metalio maintainers
+
+Consolidated against the pinned sources.lock.json revisions.
+Retains the final behavior and original file licenses of the source patches.
+
+--- a/host/esp_cfg80211.c
++++ b/host/esp_cfg80211.c
+@@ -2703,6 +2703,7 @@
+ 	struct esp_device *esp_dev;
+ 	struct esp_adapter *adapter;
+ 	struct esp_wifi_device *priv;
++	const char *alpha2;
+ 	int ret;
+ 
+ 	if (!wiphy || !request)
+@@ -2733,15 +2734,18 @@
+ 		return;
+ 	}
+ 
++	/* cfg80211 names the world domain "00", ESP-IDF names it "01". */
++	alpha2 = memcmp(request->alpha2, "00", 2) ? request->alpha2 : "01";
++
+ 	/* Do not pre-commit alpha2. Identical callbacks are suppressed only
+ 	 * after firmware has acknowledged the country-code update. */
+-	if (!memcmp(request->alpha2, priv->country_code, 2))
++	if (!memcmp(alpha2, priv->country_code, 2))
+ 		return;
+ 
+-	ret = cmd_set_reg_domain(priv, request->alpha2);
++	ret = cmd_set_reg_domain(priv, alpha2);
+ 	if (ret)
+ 		esp_err("Regulatory domain %c%c apply failed: %d\n",
+-			request->alpha2[0], request->alpha2[1], ret);
++			alpha2[0], alpha2[1], ret);
+ }
+ 
+ int esp_add_wiphy(struct esp_adapter *adapter)
+--- a/host/esp_cmd.c
++++ b/host/esp_cmd.c
+@@ -529,6 +529,19 @@
+ 			esp_request_firmware_restart(priv->adapter);
+ 		}
+ 	}
++}
++
++/*
++ * After DEINIT, the firmware has stopped Wi-Fi and drops the events of the
++ * old station, also a disconnect event that is still queued.  esp_stop()
++ * reports the disconnect itself, so do not wait for that event.
++ */
++void esp_mlme_drop_disconnect_wait(struct esp_wifi_device *priv)
++{
++	spin_lock_bh(&priv->bss_lock);
++	priv->disconnect_awaiting_mlme = false;
++	priv->disconnect_cmd_seq = 0;
++	spin_unlock_bh(&priv->bss_lock);
+ }
+ 
+ static void esp_scan_timeout_work(struct work_struct *work)
+@@ -3370,9 +3383,6 @@
+ 	struct command_node *cmd_node = NULL;
+ 	struct scan_request *scan_req;
+ 	int ret;
+-	int scan_eligible_channels = 0;
+-	enum nl80211_band band;
+-	int i;
+ 
+ 	if (!priv || !priv->adapter || !request) {
+ 		esp_err("Invalid argument\n");
+@@ -3388,27 +3398,6 @@
+ 	if (request->ie && request->ie_len) {
+ 		esp_err("Scan IEs not supported\n");
+ 		return -EOPNOTSUPP;
+-	}
+-
+-	if (request->n_channels > 1) {
+-		if (priv->adapter->wiphy) {
+-			for (band = 0; band < NUM_NL80211_BANDS; band++) {
+-				struct ieee80211_supported_band *sband;
+-
+-				sband = priv->adapter->wiphy->bands[band];
+-				if (!sband)
+-					continue;
+-				for (i = 0; i < sband->n_channels; i++) {
+-					if (!(sband->channels[i].flags & IEEE80211_CHAN_DISABLED))
+-						scan_eligible_channels++;
+-				}
+-			}
+-		}
+-		if (scan_eligible_channels > 0 && request->n_channels < scan_eligible_channels) {
+-			esp_err("Channel subset scan not supported (%u of %d scan-eligible channels)\n",
+-				request->n_channels, scan_eligible_channels);
+-			return -EOPNOTSUPP;
+-		}
+ 	}
+ 
+ 	if (test_bit(ESP_CLEANUP_IN_PROGRESS, &priv->adapter->state_flags)) {
+@@ -3443,6 +3432,10 @@
+ 	memcpy(scan_req->bssid, request->bssid, MAC_ADDR_LEN);
+ #endif
+ 
++	/*
++	 * The firmware scans one channel or all.  For a subset, such as the
++	 * OBSS scan of wpa_supplicant, scan all: the results are a superset.
++	 */
+ 	if (request->n_channels == 1 && request->channels[0])
+ 		scan_req->channel = request->channels[0]->hw_value;
+ 	else
+--- a/host/esp_debugfs.c
++++ b/host/esp_debugfs.c
+@@ -270,6 +270,9 @@
+ {
+ 	struct esp32_debugfs *debugfs = &drv_debugfs;
+ 
++	if (!IS_ENABLED(CONFIG_DEBUG_FS))
++		return 0;
++
+ 	debugfs->debugfs_dir = debugfs_create_dir(DEBUGFS_DIR_NAME, NULL);
+ 	if (IS_ERR_OR_NULL(debugfs->debugfs_dir)) {
+ 		esp_warn("Failed to create debugfs %s directory\n", DEBUGFS_DIR_NAME);
+--- a/host/include/esp_bt_api.h
++++ b/host/include/esp_bt_api.h
+@@ -28,9 +28,20 @@
+ 	#endif
+ #endif
+ 
++#if IS_ENABLED(CONFIG_BT)
+ int esp_init_bt(struct esp_adapter *adapter);
+ int esp_deinit_bt(struct esp_adapter *adapter);
+ void esp_hci_update_tx_counter(struct hci_dev *hdev, u8 pkt_type, size_t len);
+ void esp_hci_update_rx_counter(struct hci_dev *hdev, u8 pkt_type, size_t len);
++#else
++static inline int esp_init_bt(struct esp_adapter *adapter)
++{
++	return -EOPNOTSUPP;
++}
++static inline int esp_deinit_bt(struct esp_adapter *adapter)
++{
++	return 0;
++}
++#endif
+ 
+ #endif
+--- a/host/include/esp_cmd.h
++++ b/host/include/esp_cmd.h
+@@ -38,6 +38,7 @@
+ void esp_cmd_transport_failed(struct esp_adapter *adapter, uint8_t cmd_code,
+ 		uint16_t cmd_seq, int error);
+ void esp_wifi_put_bss(struct esp_wifi_device *priv);
++void esp_mlme_drop_disconnect_wait(struct esp_wifi_device *priv);
+ int cmd_scan_request(struct esp_wifi_device *priv,
+ 		struct cfg80211_scan_request *request);
+ int cmd_get_mac(struct esp_wifi_device *priv);
+--- a/host/main.c
++++ b/host/main.c
+@@ -488,13 +488,10 @@
+ 	struct esp_wifi_device *priv = NULL;
+ 	struct esp_skb_cb *cb = NULL;
+ 	struct esp_payload_header *payload_header = NULL;
+-	struct sk_buff *new_skb = NULL;
+ 	int ret = 0;
+-	u8 pad_len = 0, realloc_skb = 0;
++	u8 pad_len = 0;
+ 	u16 len = 0;
+-	u16 total_len = 0;
+ 	static u8 c;
+-	u8 *pos = NULL;
+ 	bool is_eapol;
+ 
+ 	c++;
+@@ -519,54 +516,17 @@
+ 	len = skb->len;
+ 	is_eapol = (skb->protocol == htons(ETH_P_PAE));
+ 
+-	/* Create space for payload header */
++	/* Align the header start; the firmware finds the frame by offset. */
++	if (skb_cow_head(skb, sizeof(struct esp_payload_header) +
++			      SKB_DATA_ADDR_ALIGNMENT - 1)) {
++		priv->stats.tx_errors++;
++		dev_kfree_skb(skb);
++		esp_err("Failed to make headroom");
++		return NETDEV_TX_OK;
++	}
+ 	pad_len = sizeof(struct esp_payload_header);
+-
+-	total_len = len + pad_len;
+-
+-	/* Align buffer length */
+-	pad_len += (SKB_DATA_ADDR_ALIGNMENT - (total_len % SKB_DATA_ADDR_ALIGNMENT)) %
+-		SKB_DATA_ADDR_ALIGNMENT;
+-
+-	if (skb_headroom(skb) < pad_len) {
+-		/* Headroom is not sufficient */
+-		realloc_skb = 1;
+-	}
+-
+-	if (realloc_skb || !IS_ALIGNED((unsigned long) skb->data, SKB_DATA_ADDR_ALIGNMENT)) {
+-		/* Realloc SKB */
+-		if (skb_linearize(skb)) {
+-			priv->stats.tx_errors++;
+-			dev_kfree_skb(skb);
+-			esp_err("Failed to linearize SKB");
+-			return NETDEV_TX_OK;
+-		}
+-
+-		new_skb = esp_if_alloc_skb(priv->adapter, skb->len + pad_len);
+-
+-		if (!new_skb) {
+-			esp_err("Failed to allocate SKB");
+-			priv->stats.tx_errors++;
+-			dev_kfree_skb(skb);
+-			return NETDEV_TX_OK;
+-		}
+-
+-		pos = new_skb->data;
+-		pos += pad_len;
+-
+-		/* Populate new SKB */
+-		skb_copy_from_linear_data(skb, pos, skb->len);
+-		skb_put(new_skb, skb->len + pad_len);
+-		new_skb->protocol = skb->protocol;
+-		((struct esp_skb_cb *)new_skb->cb)->priv = priv;
+-
+-		/* Replace old SKB */
+-		dev_kfree_skb_any(skb);
+-		skb = new_skb;
+-	} else {
+-		/* Realloc is not needed, Make space for interface header */
+-		skb_push(skb, pad_len);
+-	}
++	pad_len += ((unsigned long)skb->data - pad_len) & (SKB_DATA_ADDR_ALIGNMENT - 1);
++	skb_push(skb, pad_len);
+ 
+ 	/* Set payload header */
+ 	payload_header = (struct esp_payload_header *) skb->data;
+@@ -1464,6 +1424,7 @@
+ 				esp_err("Failed to deinit interface");
+ 				return 0;
+ 			}
++			esp_mlme_drop_disconnect_wait(priv);
+ 		}
+ 		clear_bit(ESP_INTERFACE_INITIALIZED, &priv->priv_flags);
+ 	}
+@@ -2045,7 +2006,9 @@
+ 	u16 len = 0, offset = 0;
+ 	u16 rx_checksum = 0, checksum = 0;
+ 	bool validate_checksum = false;
++#if IS_ENABLED(CONFIG_BT)
+ 	struct hci_dev *hdev = adapter->hcidev;
++#endif
+ 
+ 	if (!skb)
+ 		return;
+@@ -2184,6 +2147,7 @@
+ 			dev_kfree_skb_any(skb);
+ 		}
+ 	} else if (payload_header->if_type == ESP_HCI_IF) {
++#if IS_ENABLED(CONFIG_BT)
+ 		u8 pkt_type;
+ 		u16 payload_len;
+ 
+@@ -2212,6 +2176,9 @@
+ 			hdev->stat.err_rx++;
+ 		else
+ 			esp_hci_update_rx_counter(hdev, pkt_type, payload_len);
++#else
++		dev_kfree_skb_any(skb);
++#endif
+ 	} else if (payload_header->if_type == ESP_INTERNAL_IF) {
+ 		struct event_header *event = NULL;
+ 
+@@ -2426,13 +2393,15 @@
+ 	adapter.fw_recovery_backoff_ms = ESP_FW_RECOVERY_QUIET_MS;
+ 	atomic_set(&adapter.fw_boot_commit_epoch, 0);
+ 
+-	adapter.if_rx_workqueue = alloc_workqueue("ESP_IF_RX_WORK_QUEUE", WQ_HIGHPRI, 0);
++	adapter.if_rx_workqueue = alloc_workqueue("ESP_IF_RX_WORK_QUEUE",
++						  WQ_HIGHPRI | WQ_PERCPU, 0);
+ 	if (!adapter.if_rx_workqueue) {
+ 		deinit_adapter();
+ 		return NULL;
+ 	}
+ 	INIT_WORK(&adapter.if_rx_work, esp_if_rx_work);
+-	adapter.events_wq = alloc_workqueue("ESP_EVENTS_WORKQUEUE", WQ_HIGHPRI, 0);
++	adapter.events_wq = alloc_workqueue("ESP_EVENTS_WORKQUEUE",
++					    WQ_HIGHPRI | WQ_PERCPU, 0);
+ 	if (!adapter.events_wq) {
+ 		deinit_adapter();
+ 		return NULL;
