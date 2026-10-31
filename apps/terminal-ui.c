@@ -83,17 +83,33 @@ static void rectangle(struct terminal_ui *ui, int x, int y, int width, int heigh
 			pixel(ui, x + dx, y + dy, black);
 }
 
-static void glyph(struct terminal_ui *ui, int x, int y, uint32_t codepoint,
-		  bool bold, bool inverse, int scale)
+static const unsigned char *font_bitmap(uint32_t codepoint)
 {
-	const unsigned char *bitmap;
-	int row, col, dx, dy;
+	size_t low = 0, high = sizeof(terminal_symbols_8x16) / sizeof(terminal_symbols_8x16[0]);
 
 	if (!codepoint)
 		codepoint = ' ';
-	if (codepoint < 32 || codepoint > 126)
-		codepoint = '?';
-	bitmap = terminal_font_8x16[codepoint - 32];
+	if (codepoint >= 32 && codepoint <= 126)
+		return terminal_font_8x16[codepoint - 32];
+	while (low < high) {
+		size_t mid = low + (high - low) / 2;
+
+		if (codepoint == terminal_symbols_8x16[mid].codepoint)
+			return terminal_symbols_8x16[mid].bitmap;
+		if (codepoint < terminal_symbols_8x16[mid].codepoint)
+			high = mid;
+		else
+			low = mid + 1;
+	}
+	return terminal_font_8x16['?' - 32];
+}
+
+static void glyph(struct terminal_ui *ui, int x, int y, uint32_t codepoint,
+		  bool bold, bool inverse, int scale)
+{
+	const unsigned char *bitmap = font_bitmap(codepoint);
+	int row, col, dx, dy;
+
 	for (row = 0; row < 16; ++row) {
 		unsigned char bits = bitmap[row];
 

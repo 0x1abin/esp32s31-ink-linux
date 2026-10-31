@@ -4,6 +4,19 @@
 
 ## Application behavior
 
+The display decodes UTF-8 and keeps the original ASCII font. Its built-in symbol
+subset covers all arrows U+2190–21FF, box drawing and block elements U+2500–259F
+(including `╭─╮│╰─╯`), and Braille patterns U+2800–28FF used by CLI spinners.
+It also includes `· • ‣ … – — ‘ ’ “ ” ‹ › ⋯ ∅ − ∙ √ ∞ ≠ ≤ ≥ ⌘ ⏎ ⏺ ● ○ ◉ ◦ ▪ ▫ ■ □ ◆ ◇ ▶ ▷ ◀ ◁ ▲ △ ▼ ▽ ✓ ✔ ✕ ✖ ✗ ✘ ❯ ❮ ⚠ ✦ ✧ ★ ☆`.
+Symbols use the existing single-column 16 × 32 pixel cells, bold and reverse
+attributes. The Unifont 15.1.01 subset is compiled into the terminal: there is
+no runtime font download or font library. Original 8 × 16 bitmaps are retained;
+16 × 16 bitmaps are narrowed by ORing adjacent columns. Unsupported characters
+still display as `?`; Chinese, color emoji, combining-character layout and
+Unicode keyboard input are outside this subset. Remote applications must emit
+UTF-8; adding glyphs cannot recover text already replaced with ASCII `?` by
+the remote application.
+
 `metalio-terminal` starts once from BusyBox `inittab`. It opens a UNIX98 PTY,
 starts an interactive BusyBox `ash`, and parses output with libvterm 0.3.3. The
 portrait terminal has 41 columns × 22 rows of 16 × 32 pixel characters with at

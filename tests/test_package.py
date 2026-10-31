@@ -32,7 +32,7 @@ class PackageTests(unittest.TestCase):
         self.write = write
         for name in ("LICENSE", "README.md", "README.zh-CN.md", "Makefile", ".gitignore",
                      "Config.in", "external.desc", "external.mk",
-                     "LICENSES/README.md", "apps/LICENSES/MIT.txt", "apps/terminal-font.h",
+                     "LICENSES/README.md", "apps/LICENSES/MIT.txt", "apps/LICENSES/Unifont.txt", "apps/terminal-font.h",
                      "include/uapi/linux/metalio_epd.h", "kernel/Kconfig", "kernel/Makefile",
                      "board/metalio/eink4-plus/linux.config", "board/metalio/eink4-plus/uboot.config",
                      "board/metalio/eink4-plus/esp32s31-layout.cfg",
@@ -110,7 +110,7 @@ class PackageTests(unittest.TestCase):
                 self.assertEqual(archive.read(self.output.name + "/" + name), data)
         self.assertIn('PORT=/dev/ttyACM0', (self.output / "README.txt").read_text())
         for name in ("LICENSES/metalio_epd.h", "LICENSE", "sources.lock.json",
-                     "apps/terminal-font.h", "apps/LICENSES/MIT.txt"):
+                     "apps/terminal-font.h", "apps/LICENSES/MIT.txt", "apps/LICENSES/Unifont.txt"):
             self.assertTrue((self.output / name).is_file(), name)
 
     def test_optional_legal_info_includes_notices_without_source_archives(self):

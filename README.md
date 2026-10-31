@@ -9,6 +9,8 @@ local shell terminal with a touch keyboard.
 
 ## Features
 
+- Built-in UTF-8 CLI symbols include arrows, rounded borders (`╭─╰─`),
+  progress blocks, Braille spinners, check marks, and warning symbols.
 - Portrait 684 × 1216 English terminal, running BusyBox `ash` through a PTY with
   libvterm, plus a Dropbear SSH client for outbound connections.
 - Six-row QWERTY touch keyboard occupying the bottom 40%, with 60 × 73 pixel

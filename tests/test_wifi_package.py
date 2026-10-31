@@ -337,6 +337,8 @@ pathlib.Path(args[args.index('--output') + 1]).write_bytes(data + b'\\xff' * (si
         self.assertEqual(memory["firmware"]["heap_reservations"]["linux_dma_pool"],
                          {"address": 0x2F030000, "size": 0x40000})
         self.assertTrue((self.output / "LICENSES/third-party/esp-idf/esp_wifi/LICENSE").exists())
+        self.assertEqual((self.output / "apps/LICENSES/Unifont.txt").read_bytes(),
+                         (ROOT / "apps/LICENSES/Unifont.txt").read_bytes())
         self.assertTrue((self.output / "sources/patches/esp-idf/fixture.patch").exists())
         for name in ("platform/esp32s31/opensbi/platform.c", "patches/toolchain-external-custom/toolchain-external-custom.hash",
                      "board/metalio/eink4-plus/wifi/sdkconfig.defaults", "board/metalio/eink4-plus/wifi/partitions.csv"):

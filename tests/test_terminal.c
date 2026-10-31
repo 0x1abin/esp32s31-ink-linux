@@ -192,6 +192,53 @@ static void test_parser(void)
 	CHECK(blank_at(term, TERMINAL_UI_ROWS - 2, 0));
 }
 
+static void test_unicode(void)
+{
+	struct terminal *term = new_fixture();
+	const char text[] = "╭─╮│╰─╯✓✗⚠…•→█⠋";
+	const uint32_t codepoints[] = {
+		0x256d, 0x2500, 0x256e, 0x2502, 0x2570, 0x2500, 0x256f,
+		0x2713, 0x2717, 0x26a0, 0x2026, 0x2022, 0x2192, 0x2588, 0x280b,
+	};
+	const int count = sizeof(codepoints) / sizeof(codepoints[0]);
+	struct terminal_ui *expected = calloc(1, sizeof(*expected));
+	CHECK(expected);
+	for (int col = 0; col < count; ++col)
+		terminal_ui_put_cell(expected, 0, col, codepoints[col], false, false);
+	terminal_ui_draw_keyboard(expected);
+	for (int split = 0; split < 2; ++split) {
+		vterm_screen_reset(term->screen, 1);
+		feed(term, "\033[?25l");
+		if (split) {
+			for (size_t i = 0; i < sizeof(text) - 1; ++i) {
+				char byte[] = { text[i], 0 };
+				feed(term, byte);
+			}
+		} else {
+			feed(term, text);
+		}
+		for (int col = 0; col < count; ++col) {
+			CHECK(cell_at(term, 0, col).chars[0] == codepoints[col]);
+			CHECK(cell_at(term, 0, col).width == 1);
+		}
+		cursor_at(term, 0, count);
+		paint(term);
+		CHECK(!memcmp(expected->frame, term->ui.frame, sizeof(expected->frame)));
+	}
+	feed(term, "\033[1;41H╭─");
+	CHECK(cell_at(term, 0, 40).chars[0] == 0x256d);
+	CHECK(cell_at(term, 1, 0).chars[0] == 0x2500);
+	cursor_at(term, 1, 1);
+	feed(term, "\033[2J\033[H\033[1;7m✓\033[0m");
+	CHECK(cell_at(term, 0, 0).attrs.bold && cell_at(term, 0, 0).attrs.reverse);
+	terminal_ui_clear(expected);
+	terminal_ui_put_cell(expected, 0, 0, 0x2713, true, true);
+	terminal_ui_draw_keyboard(expected);
+	paint(term);
+	CHECK(!memcmp(expected->frame, term->ui.frame, sizeof(expected->frame)));
+	free(expected);
+}
+
 static void expect_key(struct terminal *term, int value, const char *bytes, size_t length)
 {
 	term->queued = 0;
@@ -865,6 +912,7 @@ int main(void)
 {
 	CHECK(atexit(destroy_fixture) == 0);
 	test_parser();
+	test_unicode();
 	test_keys_and_queue();
 	test_refresh_coalescing();
 	test_touch();

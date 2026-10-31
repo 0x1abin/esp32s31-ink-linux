@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <uchar.h>
 #include "../apps/terminal-ui.h"
 
 static unsigned int portrait_pixel(const struct terminal_ui *ui, int x, int y)
@@ -121,6 +122,89 @@ static void check_glyph_and_rotation(struct terminal_ui *ui)
 				for (dx = 0; dx < 3; ++dx)
 					assert(portrait_pixel(ui, 66 + 3 * x + dx, 905 + 3 * y + dy) ==
 					       ((letter_a[y] >> (7U - x)) & 1U));
+}
+
+static void check_symbol(struct terminal_ui *ui, uint32_t codepoint,
+			 const unsigned char *question)
+{
+	unsigned int normal;
+
+	terminal_ui_clear(ui);
+	terminal_ui_put_cell(ui, 0, 0, codepoint, false, false);
+	assert(memcmp(question, ui->frame, sizeof(ui->frame)));
+	normal = ink(ui);
+	assert(normal);
+	terminal_ui_put_cell(ui, 0, 0, codepoint, false, true);
+	assert(ink(ui) == 512U - normal);
+	terminal_ui_clear(ui);
+	terminal_ui_put_cell(ui, TERMINAL_UI_ROWS - 1, TERMINAL_UI_COLS - 1,
+			     codepoint, true, false);
+	assert(ink(ui) >= normal);
+	normal = ink(ui);
+	terminal_ui_put_cell(ui, TERMINAL_UI_ROWS - 1, TERMINAL_UI_COLS - 1,
+			     codepoint, true, true);
+	assert(ink(ui) == 512U - normal);
+	check_safe_margin(ui);
+}
+
+static void check_symbols(struct terminal_ui *ui)
+{
+	const unsigned int ranges[][2] = {
+		{ 0x2190, 0x21ff }, { 0x2500, 0x259f }, { 0x2800, 0x28ff },
+	};
+	const char32_t common[] = U"·•‣…–—‘’“”‹›⋯∅−∙√∞≠≤≥⌘⏎⏺●○◉◦▪▫■□◆◇▶▷◀◁▲△▼▽✓✔✕✖✗✘❯❮⚠✦✧★☆";
+	const uint32_t unsupported[] = {
+		0x1f, 0x7f, 0x00b6, 0x00b8, 0x218f, 0x2200, 0x24ff,
+		0x25a2, 0x27ff, 0x2900, 0x10000, UINT32_MAX,
+	};
+	const unsigned int dots[][3] = {
+		{ 3, 4, 0 }, { 3, 7, 1 }, { 3, 10, 2 }, { 5, 4, 3 },
+		{ 5, 7, 4 }, { 5, 10, 5 }, { 3, 13, 6 }, { 5, 13, 7 },
+	};
+	unsigned char question[METALIO_EPD_FRAME_BYTES];
+	unsigned int x, y;
+
+	terminal_ui_init(ui);
+	terminal_ui_put_cell(ui, 0, 0, '?', false, false);
+	memcpy(question, ui->frame, sizeof(question));
+	for (unsigned int range = 0; range < sizeof(ranges) / sizeof(ranges[0]); ++range)
+		for (unsigned int cp = ranges[range][0]; cp <= ranges[range][1]; ++cp)
+			check_symbol(ui, cp, question);
+	for (unsigned int i = 0; common[i]; ++i)
+		check_symbol(ui, common[i], question);
+	for (unsigned int pattern = 0; pattern < 256; ++pattern) {
+		terminal_ui_clear(ui);
+		terminal_ui_put_cell(ui, 0, 0, 0x2800 + pattern, false, false);
+		for (unsigned int dot = 0; dot < 8; ++dot)
+			assert(portrait_pixel(ui, 14 + 2 * dots[dot][0], 10 + 2 * dots[dot][1]) ==
+			       !!(pattern & (1U << dots[dot][2])));
+	}
+	terminal_ui_clear(ui);
+	terminal_ui_put_cell(ui, 0, 0, 0x256d, false, false);
+	terminal_ui_put_cell(ui, 0, 1, 0x2500, false, false);
+	terminal_ui_put_cell(ui, 0, 2, 0x256e, false, false);
+	terminal_ui_put_cell(ui, 1, 0, 0x2502, false, false);
+	terminal_ui_put_cell(ui, 1, 2, 0x2502, false, false);
+	terminal_ui_put_cell(ui, 2, 0, 0x2570, false, false);
+	terminal_ui_put_cell(ui, 2, 1, 0x2500, false, false);
+	terminal_ui_put_cell(ui, 2, 2, 0x256f, false, false);
+	for (x = 26; x < 52; ++x)
+		assert(portrait_pixel(ui, x, 24) && portrait_pixel(ui, x, 88));
+	for (y = 28; y < 86; ++y)
+		assert(portrait_pixel(ui, 22, y) && portrait_pixel(ui, 54, y));
+	check_safe_margin(ui);
+	for (unsigned int block = 0; block < 2; ++block) {
+		terminal_ui_clear(ui);
+		terminal_ui_put_cell(ui, 0, 0, block ? 0x2588 : 0x2580, false, false);
+		for (y = 0; y < 32; ++y)
+			for (x = 0; x < 16; ++x)
+				assert(portrait_pixel(ui, 14 + x, 10 + y) == (block || y < 16));
+	}
+	for (unsigned int i = 0; i < sizeof(unsupported) / sizeof(unsupported[0]); ++i) {
+		terminal_ui_clear(ui);
+		terminal_ui_put_cell(ui, 0, 0, unsupported[i], false, false);
+		assert(!memcmp(question, ui->frame, sizeof(question)));
+	}
 }
 
 static void check_keyboard(struct terminal_ui *ui)
@@ -346,14 +430,22 @@ static void preview(struct terminal_ui *ui, const char *path)
 {
 	FILE *output = fopen(path, "wb");
 	int row = 0, col, x, y, line, character;
-	const char *lines[] = {
-		"Metalio Linux 6.18 - native E0470A14-AF terminal",
-		"metalio:~# uname -a",
-		"Linux metalio 6.18 riscv32 GNU/Linux",
-		"metalio:~# echo 'Hello, Linux!'",
-		"Hello, Linux!",
-		"0123456789 !@#$%^&*()_+{}|:\"<>?",
-		"abcdefghijklmnopqrstuvwxyz []\\;',./`~-="
+	const char32_t *lines[] = {
+		U"Metalio Linux 6.18 - native E0470A14-AF terminal",
+		U"metalio:~# uname -a",
+		U"Linux metalio 6.18 riscv32 GNU/Linux",
+		U"metalio:~# echo 'Hello, Linux!'",
+		U"Hello, Linux!",
+		U"0123456789 !@#$%^&*()_+{}|:\"<>?",
+		U"abcdefghijklmnopqrstuvwxyz []\\;',./`~-=",
+		U"",
+		U"╭───────────────────────────────────────╮",
+		U"│ › CLI symbols: ✓ ✔ ✗ ✘ ⚠ • … → ↵ ⏎ ⏺  │",
+		U"│ ╭─╮ ╔═╗ ┌─┐ ┏━┓ ░▒▓█ ▀▄▌▐ ■□◆◇●○◉◦    │",
+		U"│ ╰─╯ ╚═╝ └─┘ ┗━┛ ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏            │",
+		U"│ ← ↑ → ↓ ↔ ↕ ↖ ↗ ↘ ↙ ▲△▼▽▶▷◀◁ ★☆ ✦✧    │",
+		U"│ ‘quotes’ “text” ‹path› – — ⋯ ≠ ≤ ≥ √ ∞│",
+		U"╰───────────────────────────────────────╯",
 	};
 
 	assert(output);
@@ -366,7 +458,7 @@ static void preview(struct terminal_ui *ui, const char *path)
 				++row;
 			}
 			assert(row < TERMINAL_UI_ROWS);
-			terminal_ui_put_cell(ui, row, col++, (unsigned char)lines[line][character],
+			terminal_ui_put_cell(ui, row, col++, lines[line][character],
 					     false, false);
 		}
 		++row;
@@ -399,6 +491,7 @@ int main(int argc, char **argv)
 	assert(storage);
 	memset(storage, 0xa5, sizeof(*storage));
 	check_glyph_and_rotation(&storage->ui);
+	check_symbols(&storage->ui);
 	check_keyboard(&storage->ui);
 	check_keyboard_layout(&storage->ui);
 	check_keyboard_render(&storage->ui);
@@ -409,6 +502,6 @@ int main(int argc, char **argv)
 	if (argc == 2)
 		preview(&storage->ui, argv[1]);
 	free(storage);
-	puts("terminal UI: ASCII glyphs, rotation, attributes, cursor, large key geometry, keyboard layers, arrows, no press redraws and 10px safe margins passed");
+	puts("terminal UI: ASCII/Unicode glyphs, rotation, attributes, box joins, blocks, Braille dots, cursor, large key geometry, keyboard layers, arrows, no press redraws and 10px safe margins passed");
 	return 0;
 }

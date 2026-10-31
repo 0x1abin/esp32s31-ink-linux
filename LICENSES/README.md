@@ -11,6 +11,7 @@ relicense upstream projects or reference material.
 | Native Linux display and touch drivers | GPL-2.0-only; touch behavior sources are recorded in [Metalio-touch.md](Metalio-touch.md) |
 | Binary phase encoder, waveform endpoints and display pattern demo | MIT; retain [Metalio-reference-MIT.txt](Metalio-reference-MIT.txt) and the provenance in [Metalio-waveform.md](Metalio-waveform.md) |
 | Terminal, UI and extracted 8×16 ASCII font | GPL-2.0-only; the font's exact Linux source commit and hashes are recorded in [terminal-font.h](../apps/terminal-font.h) |
+| Terminal Unicode symbol subset | GNU Unifont 15.1.01, GPL-2.0-or-later WITH Font-exception-2.0; retain [Unifont.txt](../apps/LICENSES/Unifont.txt). Source and extracted glyph hashes and the narrowing method are recorded in [terminal-font.h](../apps/terminal-font.h) |
 | Display UAPI header | GPL-2.0 WITH Linux-syscall-note; the unchanged [Linux-syscall-note](Linux-syscall-note) exception is copied from the pinned Linux source's `LICENSES/exceptions/Linux-syscall-note` |
 | Metalio device tree | GPL-2.0 OR MIT, as marked in the source |
 | Optional Wi-Fi loader, shared-memory driver, firmware and reference patches | File-level BSD-2-Clause, GPL-2.0-only, Apache-2.0 and the shared header's dual license; see [WiFi.md](WiFi.md) |
