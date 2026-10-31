@@ -9,19 +9,10 @@ local shell terminal with a touch keyboard.
 
 ## Features
 
-- Built-in UTF-8 CLI symbols include arrows, rounded borders (`╭─╰─`),
-  progress blocks, Braille spinners, check marks, and warning symbols.
-- Portrait 684 × 1216 English terminal, running BusyBox `ash` through a PTY with
-  libvterm, plus a Dropbear SSH client for outbound connections.
-- Six-row QWERTY touch keyboard occupying the bottom 40%, with 60 × 73 pixel
-  standard touch targets, a permanent number row and a 41 × 22 character terminal.
-  Supports Shift, symbols, arrows and control keys; no press/release
-  highlight refreshes. The on-screen Enter key sends Return.
-- Each press of the leftmost bottom confirm button requests a full GC refresh,
-  queued while busy. The other two buttons send Return; holding a button does
-  not repeat.
-- The Wi-Fi build supports WPA2-Personal STA, DHCP and DNS, with persistent
-  network configuration and automatic connection after reboot.
+- Local English shell terminal with SSH support for remote connections.
+- QWERTY touch keyboard with numbers, symbols, arrows and control keys.
+- Wi-Fi connectivity in the Wi-Fi build, with persistent network configuration
+  and automatic connection after reboot.
 
 ## System architecture
 
